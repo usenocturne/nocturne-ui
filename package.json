@@ -1,5 +1,5 @@
 {
-  "name": "nocturne",
+  "name": "nocturne-ui",
   "version": "v2.0.0-beta.1",
   "private": true,
   "scripts": {
@@ -26,7 +26,6 @@
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
-    "@cloudflare/next-on-pages": "^1.13.5",
     "autoprefixer": "^10.4.20",
     "eslint": "^8",
     "eslint-config-next": "14.2.7",
