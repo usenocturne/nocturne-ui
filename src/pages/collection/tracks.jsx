@@ -400,7 +400,16 @@ const LikedSongsPage = ({
 };
 
 export async function getServerSideProps(context) {
-  const accessToken = context.query.accessToken;
+  const accessToken = context.query.accessToken || null;
+
+  if (!accessToken) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
 
   try {
     const res = await fetch(`https://api.spotify.com/v1/me/tracks?limit=25`, {
@@ -410,7 +419,16 @@ export async function getServerSideProps(context) {
     });
 
     if (!res.ok) {
-      throw new Error("Failed to fetch liked songs");
+      return {
+        props: {
+          error: {
+            type: "FETCH_LIKED_SONGS_ERROR",
+            message: "Failed to fetch liked songs",
+          },
+          initialTracks: null,
+          accessToken: null,
+        },
+      };
     }
 
     const tracksData = await res.json();
@@ -430,7 +448,7 @@ export async function getServerSideProps(context) {
           message: error.message,
         },
         initialTracks: null,
-        accessToken,
+        accessToken: null,
       },
     };
   }

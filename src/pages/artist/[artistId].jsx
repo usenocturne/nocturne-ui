@@ -306,7 +306,16 @@ const ArtistPage = ({
 
 export async function getServerSideProps(context) {
   const { artistId } = context.params;
-  const accessToken = context.query.accessToken;
+  const accessToken = context.query.accessToken || null;
+
+  if (!accessToken) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
 
   try {
     const res = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
@@ -324,7 +333,7 @@ export async function getServerSideProps(context) {
             message: errorData.error.message,
           },
           artist: null,
-          accessToken,
+          accessToken: null,
         },
       };
     }
@@ -357,7 +366,7 @@ export async function getServerSideProps(context) {
           message: error.message,
         },
         artist: null,
-        accessToken,
+        accessToken: null,
       },
     };
   }

@@ -478,7 +478,16 @@ const PlaylistPage = ({
 
 export async function getServerSideProps(context) {
   const { playlistId } = context.params;
-  const accessToken = context.query.accessToken;
+  const accessToken = context.query.accessToken || null;
+
+  if (!accessToken) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
 
   try {
     const res = await fetch(
@@ -499,7 +508,7 @@ export async function getServerSideProps(context) {
             message: errorData.error.message,
           },
           initialPlaylist: null,
-          accessToken,
+          accessToken: null,
         },
       };
     }
@@ -540,7 +549,7 @@ export async function getServerSideProps(context) {
           message: error.message,
         },
         initialPlaylist: null,
-        accessToken,
+        accessToken: null,
       },
     };
   }

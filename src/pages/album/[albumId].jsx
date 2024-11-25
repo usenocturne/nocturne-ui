@@ -353,7 +353,16 @@ const AlbumPage = ({
 
 export async function getServerSideProps(context) {
   const { albumId } = context.params;
-  const accessToken = context.query.accessToken;
+  const accessToken = context.query.accessToken || null;
+
+  if (!accessToken) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
 
   try {
     const res = await fetch(`https://api.spotify.com/v1/albums/${albumId}`, {
@@ -371,7 +380,7 @@ export async function getServerSideProps(context) {
             message: errorData.error.message,
           },
           initialAlbum: null,
-          accessToken,
+          accessToken: null,
         },
       };
     }
@@ -397,7 +406,11 @@ export async function getServerSideProps(context) {
     };
 
     return {
-      props: { initialAlbum, accessToken, error: null },
+      props: {
+        initialAlbum,
+        accessToken,
+        error: null,
+      },
     };
   } catch (error) {
     return {
@@ -407,7 +420,7 @@ export async function getServerSideProps(context) {
           message: error.message,
         },
         initialAlbum: null,
-        accessToken,
+        accessToken: null,
       },
     };
   }
