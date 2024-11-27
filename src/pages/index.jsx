@@ -1,11 +1,10 @@
 import Sidebar from "../components/Sidebar";
 import Settings from "../components/Settings";
 import LongPressLink from "../components/LongPressLink";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { fetchLikedSongs } from "../services/playlistService";
 import DonationQRModal from "../components/DonationQRModal";
-import { useRouter } from "next/router";
 
 export default function Home({
   accessToken,
@@ -21,65 +20,7 @@ export default function Home({
   showBrightnessOverlay,
   handleError,
 }) {
-  const router = useRouter();
   const [showDonationModal, setShowDonationModal] = useState(false);
-  const [focusedItemIndex, setFocusedItemIndex] = useState(-1);
-  const [hasScrolled, setHasScrolled] = useState(false);
-  const isFirstScrollRef = useRef(true);
-  const unfocusTimeoutRef = useRef(null);
-
-  const getCurrentItems = () => {
-    switch (activeSection) {
-      case "recents":
-        return albumsQueue;
-      case "library":
-        return [
-          {
-            ...likedSongs,
-            id: "liked-songs",
-            images: [
-              { url: "https://misc.scdn.co/liked-songs/liked-songs-640.png" },
-            ],
-          },
-          ...playlists,
-        ];
-      case "artists":
-        return artists;
-      case "radio":
-        return radio;
-      default:
-        return [];
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter" && focusedItemIndex >= 0) {
-      e.preventDefault();
-      const items = getCurrentItems();
-      const item = items[focusedItemIndex];
-
-      if (item) {
-        let type =
-          activeSection === "recents"
-            ? "album"
-            : activeSection === "artists"
-            ? "artist"
-            : "playlist";
-        router.push({
-          pathname: `/${type}/${item.id}`,
-          query: { accessToken },
-        });
-      }
-    }
-  };
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyPress);
-    return () => {
-      window.removeEventListener("keydown", handleKeyPress);
-    };
-  }, [focusedItemIndex, activeSection]);
-
   useEffect(() => {
     if (activeSection === "radio") {
       updateGradientColors(null, "radio");
@@ -102,6 +43,7 @@ export default function Home({
   const scrollTimeoutRef = useRef(null);
   const prevQueueLengthRef = useRef(albumsQueue.length);
   const itemWidth = 290;
+  const hasScrolledToCurrentAlbumRef = useRef(false);
   const [likedSongs, setLikedSongs] = useState({
     name: "Liked Songs",
     tracks: { total: 0 },
@@ -110,65 +52,21 @@ export default function Home({
     },
   });
 
-  const calculateFocusedItem = useCallback(
-    (scrollLeft) => {
-      const itemTotalWidth = itemWidth + 40;
-      const index = Math.round(scrollLeft / itemTotalWidth);
-      return Math.max(0, index);
-    },
-    [itemWidth]
-  );
+  const handleWheel = (e) => {
+    if (!showBrightnessOverlay) {
+      e.preventDefault();
 
-  const handleWheel = useCallback(
-    (e) => {
-      if (!showBrightnessOverlay) {
-        e.preventDefault();
+      if (scrollContainerRef.current) {
+        const scrollAmount = itemWidth;
+        const direction = Math.sign(e.deltaX);
 
-        if (unfocusTimeoutRef.current) {
-          clearTimeout(unfocusTimeoutRef.current);
-        }
-
-        if (isFirstScrollRef.current) {
-          setHasScrolled(true);
-          setFocusedItemIndex(0);
-          isFirstScrollRef.current = false;
-
-          unfocusTimeoutRef.current = setTimeout(() => {
-            setFocusedItemIndex(-1);
-          }, 2000);
-
-          return;
-        }
-
-        if (scrollContainerRef.current) {
-          const itemTotalWidth = itemWidth + 40;
-          const direction = Math.sign(e.deltaX);
-          const currentScrollLeft = scrollContainerRef.current.scrollLeft;
-          const currentIndex = Math.round(currentScrollLeft / itemTotalWidth);
-          const nextIndex = Math.max(0, currentIndex + direction);
-          const targetScrollLeft = nextIndex * itemTotalWidth;
-
-          setFocusedItemIndex(nextIndex);
-          setHasScrolled(true);
-
-          scrollContainerRef.current.style.scrollBehavior = "smooth";
-          scrollContainerRef.current.scrollTo({
-            left: targetScrollLeft,
-            behavior: "smooth",
-          });
-
-          setTimeout(() => {
-            scrollContainerRef.current.style.scrollBehavior = "auto";
-          }, 500);
-
-          unfocusTimeoutRef.current = setTimeout(() => {
-            setFocusedItemIndex(-1);
-          }, 2000);
-        }
+        scrollContainerRef.current.scrollBy({
+          left: scrollAmount * direction,
+          behavior: "smooth",
+        });
       }
-    },
-    [showBrightnessOverlay]
-  );
+    }
+  };
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
@@ -183,46 +81,19 @@ export default function Home({
         scrollContainer.removeEventListener("wheel", handleWheel);
       }
     };
-  }, [handleWheel]);
+  }, []);
 
-  const handleScroll = useCallback(() => {
-    if (isFirstScrollRef.current) {
-      return;
-    }
-
+  const handleScroll = () => {
     setIsScrolling(true);
 
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
 
-    if (unfocusTimeoutRef.current) {
-      clearTimeout(unfocusTimeoutRef.current);
-    }
-
-    if (scrollContainerRef.current) {
-      const newFocusedIndex = calculateFocusedItem(
-        scrollContainerRef.current.scrollLeft
-      );
-      setFocusedItemIndex(newFocusedIndex);
-
-      scrollTimeoutRef.current = setTimeout(() => {
-        setIsScrolling(false);
-      }, 150);
-
-      unfocusTimeoutRef.current = setTimeout(() => {
-        setFocusedItemIndex(-1);
-      }, 2000);
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (unfocusTimeoutRef.current) {
-        clearTimeout(unfocusTimeoutRef.current);
-      }
-    };
-  }, []);
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsScrolling(false);
+    }, 150);
+  };
 
   useEffect(() => {
     if (
@@ -234,9 +105,6 @@ export default function Home({
         left: 0,
         behavior: "smooth",
       });
-      setFocusedItemIndex(-1);
-      setHasScrolled(false);
-      isFirstScrollRef.current = true;
     }
 
     prevQueueLengthRef.current = albumsQueue.length;
@@ -251,9 +119,28 @@ export default function Home({
   }, []);
 
   useEffect(() => {
-    setFocusedItemIndex(-1);
-    setHasScrolled(false);
-    isFirstScrollRef.current = true;
+    if (
+      scrollContainerRef.current &&
+      activeSection === "recents" &&
+      currentlyPlayingAlbum &&
+      !hasScrolledToCurrentAlbumRef.current
+    ) {
+      const currentAlbumIndex = albumsQueue.findIndex(
+        (album) => album.id === currentlyPlayingAlbum.id
+      );
+
+      if (currentAlbumIndex !== -1) {
+        scrollContainerRef.current.scrollTo({
+          left: currentAlbumIndex * (itemWidth + 40),
+          behavior: "smooth",
+        });
+        hasScrolledToCurrentAlbumRef.current = true;
+      }
+    }
+  }, [currentlyPlayingAlbum, activeSection, albumsQueue]);
+
+  useEffect(() => {
+    hasScrolledToCurrentAlbumRef.current = false;
   }, [activeSection]);
 
   useEffect(() => {
@@ -265,59 +152,6 @@ export default function Home({
       });
     }
   }, [accessToken]);
-
-  const renderItem = (item, index, type) => {
-    const isScaled = hasScrolled && focusedItemIndex === index;
-    const scaleClass = isScaled ? "scale-110" : "scale-100";
-
-    return (
-      <div
-        key={item.id}
-        className={`min-w-[280px] mr-10 snap-center transition-all duration-300 origin-center ${scaleClass}`}
-      >
-        <LongPressLink
-          href={{
-            pathname: `/${type}/${item.id}`,
-            query: { accessToken },
-          }}
-          spotifyUrl={item?.external_urls?.spotify}
-          accessToken={accessToken}
-        >
-          <Image
-            src={item?.images?.[0]?.url || "/images/not-playing.webp"}
-            alt={`${type} Cover`}
-            width={280}
-            height={280}
-            className={`mt-10 aspect-square ${
-              type === "artist" ? "rounded-full" : "rounded-[12px]"
-            } drop-shadow-xl`}
-          />
-        </LongPressLink>
-        <LongPressLink
-          href={`/${type}/${item.id}`}
-          spotifyUrl={item?.external_urls?.spotify}
-          accessToken={accessToken}
-        >
-          <h4 className="mt-2 text-[36px] font-[580] text-white truncate tracking-tight max-w-[280px]">
-            {item.name}
-          </h4>
-        </LongPressLink>
-        {type === "artist" ? (
-          <h4 className="text-[28px] font-[560] text-white truncate tracking-tight max-w-[280px]">
-            {item.followers.total.toLocaleString()} Followers
-          </h4>
-        ) : type === "playlist" ? (
-          <h4 className="text-[28px] font-[560] text-white truncate tracking-tight max-w-[280px]">
-            {item.tracks.total.toLocaleString()} Songs
-          </h4>
-        ) : (
-          <h4 className="text-[28px] font-[560] text-white truncate tracking-tight max-w-[280px]">
-            {item.artists?.map((artist) => artist.name).join(", ")}
-          </h4>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="relative min-h-screen">
@@ -333,65 +167,206 @@ export default function Home({
             />
           </div>
 
-          <div className="h-screen overflow-y-auto pt-2">
-            <div className="-ml-2">
-              <div
-                ref={scrollContainerRef}
-                onScroll={handleScroll}
-                className="h-screen flex overflow-x-auto scroll-container pl-6 transition-all duration-500 ease-in-out"
-                style={{
-                  willChange: "transform",
-                  scrollBehavior: "smooth",
-                  scrollSnapType: "x mandatory",
-                  scrollTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-              >
-                {activeSection === "recents" &&
-                  albumsQueue.map((album, index) =>
-                    renderItem(album, index, "album")
+          <div className="h-screen overflow-y-auto">
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="flex overflow-x-auto scroll-container p-2 snap-x snap-mandatory"
+              style={{ willChange: "transform" }}
+            >
+              {activeSection === "recents" && (
+                <>
+                  {albumsQueue.map((album) => (
+                    <div
+                      key={album.id}
+                      className="min-w-[280px] mr-10 snap-start"
+                    >
+                      <LongPressLink
+                        href={`/album/${album.id}`}
+                        spotifyUrl={album?.external_urls?.spotify}
+                        accessToken={accessToken}
+                      >
+                        <Image
+                          src={
+                            album?.images?.[0]?.url ||
+                            "/images/not-playing.webp"
+                          }
+                          alt="Album Cover"
+                          width={280}
+                          height={280}
+                          className="mt-10 aspect-square rounded-[12px] drop-shadow-xl"
+                        />
+                      </LongPressLink>
+                      <LongPressLink
+                        href={`/album/${album.id}`}
+                        spotifyUrl={album?.external_urls?.spotify}
+                        accessToken={accessToken}
+                      >
+                        <h4 className="mt-2 text-[36px] font-[580] text-white truncate tracking-tight max-w-[280px]">
+                          {album.name}
+                        </h4>
+                      </LongPressLink>
+                      <LongPressLink
+                        href={`/artist/${album.artists[0].id}`}
+                        spotifyUrl={album.artists[0]?.external_urls?.spotify}
+                        accessToken={accessToken}
+                      >
+                        <h4 className="text-[32px] font-[560] text-white truncate tracking-tight max-w-[280px]">
+                          {album.artists
+                            .map((artist) => artist.name)
+                            .join(", ")}
+                        </h4>
+                      </LongPressLink>
+                    </div>
+                  ))}
+                </>
+              )}
+              {activeSection === "library" && (
+                <>
+                  {likedSongs && (
+                    <div className="min-w-[280px] mr-10 snap-start">
+                      <LongPressLink
+                        href="/collection/tracks"
+                        spotifyUrl={likedSongs.external_urls.spotify}
+                        accessToken={accessToken}
+                      >
+                        <Image
+                          src="https://misc.scdn.co/liked-songs/liked-songs-640.png"
+                          alt="Liked Songs"
+                          width={280}
+                          height={280}
+                          className="mt-10 aspect-square rounded-[12px] drop-shadow-xl"
+                        />
+                      </LongPressLink>
+                      <LongPressLink
+                        href="/collection/tracks"
+                        spotifyUrl={likedSongs.external_urls.spotify}
+                        accessToken={accessToken}
+                      >
+                        <h4 className="mt-2 text-[36px] font-[580] text-white truncate tracking-tight max-w-[280px]">
+                          {likedSongs.name}
+                        </h4>
+                      </LongPressLink>
+                      <h4 className="text-[28px] font-[560] text-white truncate tracking-tight max-w-[280px]">
+                        {likedSongs.tracks.total.toLocaleString()} Songs
+                      </h4>
+                    </div>
                   )}
-
-                {activeSection === "library" && (
-                  <>
-                    {likedSongs &&
-                      renderItem(
-                        {
-                          ...likedSongs,
-                          id: "liked-songs",
-                          images: [
-                            {
-                              url: "https://misc.scdn.co/liked-songs/liked-songs-640.png",
-                            },
-                          ],
-                        },
-                        0,
-                        "playlist"
-                      )}
-                    {playlists.map((item, index) =>
-                      renderItem(item, index + 1, "playlist")
-                    )}
-                  </>
-                )}
-
-                {activeSection === "artists" &&
-                  artists.map((artist, index) =>
-                    renderItem(artist, index, "artist")
-                  )}
-
-                {activeSection === "radio" &&
-                  radio.map((playlist, index) =>
-                    renderItem(playlist, index, "playlist")
-                  )}
-
-                {activeSection === "settings" && (
-                  <div className="w-full h-full overflow-y-auto">
-                    <Settings
+                  {playlists.map((item) => (
+                    <div
+                      key={item.id}
+                      className="min-w-[280px] mr-10 snap-start"
+                    >
+                      <LongPressLink
+                        href={`/playlist/${item.id}`}
+                        spotifyUrl={item?.external_urls?.spotify}
+                        accessToken={accessToken}
+                      >
+                        <Image
+                          src={
+                            item?.images?.[0]?.url || "/images/not-playing.webp"
+                          }
+                          alt="Playlist Cover"
+                          width={280}
+                          height={280}
+                          className="mt-10 aspect-square rounded-[12px] drop-shadow-xl"
+                        />
+                      </LongPressLink>
+                      <LongPressLink
+                        href={`/playlist/${item.id}`}
+                        spotifyUrl={item?.external_urls?.spotify}
+                        accessToken={accessToken}
+                      >
+                        <h4 className="mt-2 text-[36px] font-[580] text-white truncate tracking-tight max-w-[280px]">
+                          {item.name}
+                        </h4>
+                      </LongPressLink>
+                      <h4 className="text-[28px] font-[560] text-white truncate tracking-tight max-w-[280px]">
+                        {item.tracks.total.toLocaleString()} Songs
+                      </h4>
+                    </div>
+                  ))}
+                </>
+              )}
+              {activeSection === "artists" &&
+                artists.map((artist) => (
+                  <div
+                    key={artist.id}
+                    className="min-w-[280px] mr-10 snap-start"
+                  >
+                    <LongPressLink
+                      href={`/artist/${artist.id}`}
+                      spotifyUrl={artist?.external_urls?.spotify}
                       accessToken={accessToken}
-                      onOpenDonationModal={() => setShowDonationModal(true)}
-                    />
+                    >
+                      <Image
+                        src={
+                          artist?.images?.[0]?.url || "/images/not-playing.webp"
+                        }
+                        alt="Artist Cover"
+                        width={280}
+                        height={280}
+                        className="mt-10 aspect-square rounded-full drop-shadow-xl"
+                      />
+                    </LongPressLink>
+                    <LongPressLink
+                      href={`/artist/${artist.id}`}
+                      spotifyUrl={artist?.external_urls?.spotify}
+                      accessToken={accessToken}
+                    >
+                      <h4 className="mt-2 text-[36px] font-[580] text-white truncate tracking-tight max-w-[280px]">
+                        {artist.name}
+                      </h4>
+                    </LongPressLink>
+                    <h4 className="text-[28px] font-[560] text-white truncate tracking-tight max-w-[280px]">
+                      {artist.followers.total.toLocaleString()} Followers
+                    </h4>
                   </div>
-                )}
-              </div>
+                ))}
+              {activeSection === "radio" &&
+                radio.map((playlist) => (
+                  <div
+                    key={playlist.id}
+                    className="min-w-[280px] mr-10 snap-start"
+                  >
+                    <LongPressLink
+                      href={`/playlist/${playlist.id}`}
+                      spotifyUrl={playlist?.external_urls?.spotify}
+                      accessToken={accessToken}
+                    >
+                      <Image
+                        src={
+                          playlist?.images?.[0]?.url ||
+                          "/images/not-playing.webp"
+                        }
+                        alt="Radio Cover"
+                        width={280}
+                        height={280}
+                        className="mt-10 aspect-square rounded-[12px] drop-shadow-xl"
+                      />
+                    </LongPressLink>
+                    <LongPressLink
+                      href={`/playlist/${playlist.id}`}
+                      spotifyUrl={playlist?.external_urls?.spotify}
+                      accessToken={accessToken}
+                    >
+                      <h4 className="mt-2 text-[36px] font-[580] text-white truncate tracking-tight max-w-[280px]">
+                        {playlist.name}
+                      </h4>
+                    </LongPressLink>
+                    <h4 className="text-[28px] font-[560] text-white truncate tracking-tight max-w-[280px]">
+                      {playlist.owner.display_name}
+                    </h4>
+                  </div>
+                ))}
+              {activeSection === "settings" && (
+                <div className="w-full h-full overflow-y-auto">
+                  <Settings
+                    accessToken={accessToken}
+                    onOpenDonationModal={() => setShowDonationModal(true)}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
