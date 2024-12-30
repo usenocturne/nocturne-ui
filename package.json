@@ -1,6 +1,6 @@
 {
   "name": "nocturne",
-  "version": "v2.1.1-beta.4",
+  "version": "v2.1.1-beta.5",
   "private": true,
   "scripts": {
     "dev": "node server.js",
@@ -19,7 +19,7 @@
     "clsx": "^2.1.1",
     "color-thief-browser": "^2.0.2",
     "lodash": "^4.17.21",
-    "lucide-react": "^0.441.0",
+    "lucide-react": "^0.469.0",
     "next": "^14.2.10",
     "qrcode.react": "^4.1.0",
     "react": "^18.3.1",
