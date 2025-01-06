@@ -108,7 +108,11 @@ create table spotify_credentials (
   last_used timestamp with time zone,
   first_used_at timestamp with time zone,
   token_refresh_count integer default 0,
-  user_agent text
+  user_agent text,
+  session_id TEXT,
+  auth_completed BOOLEAN,
+  access_token TEXT,
+  token_expiry TIMESTAMPTZ
 );
 
 -- Add policies for Row Level Security (RLS)
@@ -188,7 +192,7 @@ Now, it's time to:
 
 Nocturne requires HTTPS to make API requests, so you need to set up HTTPS on the local server. This makes two different ways to run the dev server:
 
-#### Using [Caddy][caddy-download]
+#### Method #1: Using [Caddy][caddy-download]
 
 [caddy-download]: https://caddyserver.com
 
@@ -214,7 +218,7 @@ caddy run
 This may prompt you for a `sudo` password to install Caddy's certificate on your system, to make it automatically trusted.
 
 
-#### Using `mkcert` and JS webserver
+#### Method #2: Using `mkcert` and JS webserver
 
 First, install `mkcert`.
 
@@ -355,6 +359,33 @@ npx wrangler secret put ENCRYPTION_IV
 cd workers/key-rotation
 npx wrangler deploy
 ```
+
+## Displaying your local environment on the Car Thing
+After setting up your local server, you may follow these steps to see your changes on your car thing.
+
+1. SSH into your Raspberry pi.
+   ```
+   ssh pi@raspberrypi.local
+   ```
+2. SSH into the Car Thing.
+   ```
+   ssh superbird@192.168.7.2
+   ```
+3. Edit `/scripts/chromium_settings.sh`.
+   ```
+   nano /scripts/chromium_settings.sh
+   ```
+4. Replace the URL to point to your local server's IP address:
+   ```bash
+   # settings for /scripts/start_chromium.sh
+
+   # URL="https://nocturne.brandons.place/"
+   URL="http://your.local.ip.address:3000/"
+   ```
+5. Reboot your car thing to apply your changes.
+   ```
+   sudo reboot
+   ```
 
 ## Key Rotation
 
