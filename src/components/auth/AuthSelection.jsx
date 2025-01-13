@@ -77,7 +77,7 @@ const ConnectionScreen = () => {
               if (isConnected) {
                 clearInterval(networkCheckInterval);
                 if (hasStoredCredentials) {
-                  window.location.reload();
+                  router.push("/");
                 }
               }
             }, 5000);
