@@ -7,7 +7,7 @@ import PairingScreen from "../bluetooth/PairingScreen";
 import EnableTetheringScreen from "../bluetooth/EnableTetheringScreen";
 import { NocturneIcon } from "../icons";
 
-import { checkNetworkConnectivity, waitForNetwork } from "../../lib/networkChecker";
+import { checkNetworkConnectivity } from "../../lib/networkChecker";
 
 const ConnectionScreen = () => {
   const [isBluetoothDiscovering, setIsBluetoothDiscovering] = useState(false);
@@ -15,6 +15,7 @@ const ConnectionScreen = () => {
   const [pairingKey, setPairingKey] = useState(null);
   const [showTethering, setShowTethering] = useState(false);
   const [deviceType, setDeviceType] = useState(null);
+  // const [isNetworkConnected, setIsNetworkConnected] = useState(false);
   
   const hasStoredCredentials = typeof window !== 'undefined' && (
     localStorage.getItem("spotifyRefreshToken") || 
@@ -77,7 +78,7 @@ const ConnectionScreen = () => {
               if (isConnected) {
                 clearInterval(networkCheckInterval);
                 if (hasStoredCredentials) {
-                  router.push("/");
+                  window.location.reload();
                 }
               }
             }, 5000);
@@ -101,16 +102,6 @@ const ConnectionScreen = () => {
   useEffect(() => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setDeviceType(isIOS ? "ios" : "other");
-
-    const networkCheckInterval = setInterval(async () => {
-      const isConnected = await checkNetworkConnectivity();
-      if (isConnected) {
-        clearInterval(networkCheckInterval);
-        if (hasStoredCredentials) {
-          router.push("/");
-        }
-      }
-    }, 1000);
 
     const ws = new WebSocket("ws://localhost:5000/ws");
 

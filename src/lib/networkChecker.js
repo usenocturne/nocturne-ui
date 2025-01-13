@@ -21,9 +21,6 @@ export async function checkNetworkConnectivity() {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new NetworkError("Authorization error");
-      }
       throw new NetworkError(`HTTP error! status: ${response.status}`);
     }
 

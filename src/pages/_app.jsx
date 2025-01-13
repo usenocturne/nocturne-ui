@@ -153,12 +153,7 @@ export default function App({ Component, pageProps }) {
       }
       const intervalId = setInterval(async () => {
         try {
-          const savedAccessToken = localStorage.getItem("spotifyAccessToken");
-          if (savedAccessToken) {
-            await checkNetworkConnectivity();
-          } else {
-            await fetch("https://api.spotify.com/v1", { method: "OPTIONS" });
-          }
+          await checkNetworkConnectivity();
           clearInterval(intervalId);
           setNetworkStatus({ isConnected: true });
         } catch (error) {
@@ -207,9 +202,7 @@ export default function App({ Component, pageProps }) {
       if (typeof window === "undefined") return;
 
       try {
-        await checkNetworkConnectivity(
-          localStorage.getItem("spotifyAccessToken")
-        );
+        await checkNetworkConnectivity();
       } catch (error) {
         setAuthState({
           authSelectionMade: false,
