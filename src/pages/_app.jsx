@@ -155,7 +155,7 @@ export default function App({ Component, pageProps }) {
         try {
           const savedAccessToken = localStorage.getItem("spotifyAccessToken");
           if (savedAccessToken) {
-            await checkNetworkConnectivity(savedAccessToken);
+            await checkNetworkConnectivity();
           } else {
             await fetch("https://api.spotify.com/v1", { method: "OPTIONS" });
           }
@@ -301,11 +301,10 @@ export default function App({ Component, pageProps }) {
       );
 
       const networkCleanup = startNetworkMonitoring(
-        accessToken,
         async (isConnected) => {
           try {
             if (isConnected) {
-              const status = await checkNetworkConnectivity(accessToken);
+              const status = await checkNetworkConnectivity();
               setNetworkStatus({ isConnected: true });
             } else {
               setNetworkStatus({ isConnected: false });

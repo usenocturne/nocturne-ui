@@ -7,33 +7,19 @@ import PairingScreen from "../bluetooth/PairingScreen";
 import EnableTetheringScreen from "../bluetooth/EnableTetheringScreen";
 import { NocturneIcon } from "../icons";
 
+import { checkNetworkConnectivity, waitForNetwork } from "../../lib/networkChecker";
+
 const ConnectionScreen = () => {
   const [isBluetoothDiscovering, setIsBluetoothDiscovering] = useState(false);
   const [isPairing, setIsPairing] = useState(false);
   const [pairingKey, setPairingKey] = useState(null);
   const [showTethering, setShowTethering] = useState(false);
   const [deviceType, setDeviceType] = useState(null);
-  const [isNetworkConnected, setIsNetworkConnected] = useState(false);
   
   const hasStoredCredentials = typeof window !== 'undefined' && (
     localStorage.getItem("spotifyRefreshToken") || 
     localStorage.getItem("spotifyAccessToken")
   );
-
-  const checkNetworkConnectivity = async () => {
-    try {
-      const response = await fetch("https://api.spotify.com/v1", {
-        method: "OPTIONS",
-      });
-      const isConnected = response.ok;
-      setIsNetworkConnected(isConnected);
-      return isConnected;
-    } catch (error) {
-      console.error("Network connectivity check failed:", error);
-      setIsNetworkConnected(false);
-      return false;
-    }
-  };
 
   const enableBluetoothDiscovery = async () => {
     try {
@@ -116,7 +102,15 @@ const ConnectionScreen = () => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setDeviceType(isIOS ? "ios" : "other");
 
-    checkNetworkConnectivity();
+    const networkCheckInterval = setInterval(async () => {
+      const isConnected = await checkNetworkConnectivity();
+      if (isConnected) {
+        clearInterval(networkCheckInterval);
+        if (hasStoredCredentials) {
+          router.push("/");
+        }
+      }
+    }, 1000);
 
     const ws = new WebSocket("ws://localhost:5000/ws");
 
