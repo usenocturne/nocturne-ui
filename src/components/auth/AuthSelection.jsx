@@ -6,8 +6,9 @@ import NetworkScreen from "../bluetooth/NetworkScreen";
 import PairingScreen from "../bluetooth/PairingScreen";
 import EnableTetheringScreen from "../bluetooth/EnableTetheringScreen";
 import { NocturneIcon } from "../icons";
+import { checkNetworkConnectivity } from "../../lib/networkChecker";
 
-const ConnectionScreen = () => {
+export const ConnectionScreen = () => {
   const [isBluetoothDiscovering, setIsBluetoothDiscovering] = useState(false);
   const [isPairing, setIsPairing] = useState(false);
   const [pairingKey, setPairingKey] = useState(null);
@@ -19,21 +20,6 @@ const ConnectionScreen = () => {
     localStorage.getItem("spotifyRefreshToken") || 
     localStorage.getItem("spotifyAccessToken")
   );
-
-  const checkNetworkConnectivity = async () => {
-    try {
-      const response = await fetch("https://api.spotify.com/v1", {
-        method: "OPTIONS",
-      });
-      const isConnected = response.ok;
-      setIsNetworkConnected(isConnected);
-      return isConnected;
-    } catch (error) {
-      console.error("Network connectivity check failed:", error);
-      setIsNetworkConnected(false);
-      return false;
-    }
-  };
 
   const enableBluetoothDiscovery = async () => {
     try {
@@ -87,12 +73,18 @@ const ConnectionScreen = () => {
             clearInterval(intervalId);
 
             const networkCheckInterval = setInterval(async () => {
-              const isConnected = await checkNetworkConnectivity();
-              if (isConnected) {
-                clearInterval(networkCheckInterval);
-                if (hasStoredCredentials) {
-                  window.location.reload();
+              try {
+                const { isConnected } = await checkNetworkConnectivity();
+                setIsNetworkConnected(isConnected);
+                if (isConnected) {
+                  clearInterval(networkCheckInterval);
+                  if (hasStoredCredentials) {
+                    window.location.reload();
+                  }
                 }
+              } catch (error) {
+                console.error("Network connectivity check failed:", error);
+                setIsNetworkConnected(false);
               }
             }, 5000);
 
@@ -116,8 +108,18 @@ const ConnectionScreen = () => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setDeviceType(isIOS ? "ios" : "other");
 
-    checkNetworkConnectivity();
+    const checkNetwork = async () => {
+      try {
+        const { isConnected } = await checkNetworkConnectivity();
+        setIsNetworkConnected(isConnected);
+      } catch (error) {
+        console.error("Network connectivity check failed:", error);
+        setIsNetworkConnected(false);
+      }
+    };
 
+    checkNetwork();
+    
     const ws = new WebSocket("ws://localhost:5000/ws");
 
     ws.onmessage = (event) => {

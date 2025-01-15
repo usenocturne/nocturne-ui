@@ -41,6 +41,7 @@ import { useGradientState } from "../hooks/useGradientState";
 import { useNavigationState } from "../hooks/useNavigationState";
 import { useKeyboardHandlers } from "../hooks/useKeyboardHandlers";
 import { supabase } from "@/lib/supabaseClient";
+import NetworkScreen from "../components/bluetooth/NetworkScreen";
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
@@ -151,23 +152,84 @@ export default function App({ Component, pageProps }) {
       if (router.pathname.includes("phone-auth")) {
         return;
       }
-      const intervalId = setInterval(async () => {
-        try {
-          const savedAccessToken = localStorage.getItem("spotifyAccessToken");
-          if (savedAccessToken) {
-            await checkNetworkConnectivity(savedAccessToken);
-          } else {
-            await fetch("https://api.spotify.com/v1", { method: "OPTIONS" });
-          }
-          clearInterval(intervalId);
-          setNetworkStatus({ isConnected: true });
-        } catch (error) {
-          setNetworkStatus({ isConnected: false });
-          handleError("NETWORK_ERROR", "Unable to connect to Spotify");
-        }
-      }, 3000);
 
-      return () => clearInterval(intervalId);
+      try {
+        await checkNetworkConnectivity();
+        setNetworkStatus({ isConnected: true });
+
+        const savedRefreshToken = localStorage.getItem("spotifyRefreshToken");
+        const savedAuthType = localStorage.getItem("spotifyAuthType");
+        const savedTempId = localStorage.getItem("spotifyTempId");
+
+        if (savedRefreshToken && savedAuthType) {
+          setAuthState({
+            authSelectionMade: true,
+            authType: savedAuthType,
+            tempId: savedTempId,
+          });
+
+          try {
+            const refreshData = await refreshAccessToken();
+            if (refreshData?.access_token) {
+              setAccessToken(refreshData.access_token);
+              localStorage.setItem("spotifyAccessToken", refreshData.access_token);
+
+              if (refreshData.refresh_token) {
+                setRefreshToken(refreshData.refresh_token);
+                localStorage.setItem("spotifyRefreshToken", refreshData.refresh_token);
+              }
+            }
+          } catch (error) {
+            console.error("Failed to restore session:", error);
+            if (error.message?.includes("invalid_grant")) {
+              await clearSession();
+              setAuthState({
+                authSelectionMade: false,
+                authType: null,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Network check failed:", error);
+        setNetworkStatus({ isConnected: false });
+        
+        const intervalId = setInterval(async () => {
+          try {
+            await checkNetworkConnectivity();
+            clearInterval(intervalId);
+            setNetworkStatus({ isConnected: true });
+            
+            const savedRefreshToken = localStorage.getItem("spotifyRefreshToken");
+            const savedAuthType = localStorage.getItem("spotifyAuthType");
+            const savedTempId = localStorage.getItem("spotifyTempId");
+
+            if (savedRefreshToken && savedAuthType) {
+              setAuthState({
+                authSelectionMade: true,
+                authType: savedAuthType,
+                tempId: savedTempId,
+              });
+
+              const refreshData = await refreshAccessToken();
+              if (refreshData?.access_token) {
+                setAccessToken(refreshData.access_token);
+                localStorage.setItem("spotifyAccessToken", refreshData.access_token);
+                if (refreshData.refresh_token) {
+                  setRefreshToken(refreshData.refresh_token);
+                  localStorage.setItem("spotifyRefreshToken", refreshData.refresh_token);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Network check failed:", error);
+          }
+        }, 3000);
+
+        return () => clearInterval(intervalId);
+      } finally {
+        setLoading(false);
+      }
     };
 
     checkInitialConnectivity();
@@ -207,9 +269,7 @@ export default function App({ Component, pageProps }) {
       if (typeof window === "undefined") return;
 
       try {
-        await checkNetworkConnectivity(
-          localStorage.getItem("spotifyAccessToken")
-        );
+        await checkNetworkConnectivity();
       } catch (error) {
         setAuthState({
           authSelectionMade: false,
@@ -305,8 +365,8 @@ export default function App({ Component, pageProps }) {
         async (isConnected) => {
           try {
             if (isConnected) {
-              const status = await checkNetworkConnectivity(accessToken);
-              setNetworkStatus({ isConnected: true });
+              const { isConnected: networkConnected } = await checkNetworkConnectivity();
+              setNetworkStatus({ isConnected: networkConnected });
             } else {
               setNetworkStatus({ isConnected: false });
               handleError("NETWORK_ERROR", "Lost connection to Spotify");
@@ -556,8 +616,47 @@ export default function App({ Component, pageProps }) {
     };
   }, []);
 
-  if (!isHydrated) {
+  if (!isHydrated || loading) {
     return null;
+  }
+
+  if (!networkStatus.isConnected) {
+    return (
+      <main
+        className={`overflow-hidden relative min-h-screen rounded-2xl ${mainFontClasses}`}
+        style={{
+          fontFamily:
+            "var(--font-inter), var(--font-noto-sans-sc), var(--font-noto-sans-tc), var(--font-noto-serif-jp), var(--font-noto-sans-kr), var(--font-noto-naskh-ar), var(--font-noto-sans-dv), var(--font-noto-sans-he), var(--font-noto-sans-bn), var(--font-noto-sans-ta), var(--font-noto-sans-th), var(--font-noto-sans-gk)",
+          fontOpticalSizing: "auto",
+        }}
+      >
+        <NetworkScreen />
+      </main>
+    );
+  }
+
+  const shouldShowAuthSelection = 
+    !authState.authSelectionMade && 
+    !router.pathname.includes("phone-auth") && 
+    !window.location.search.includes("code") &&
+    !localStorage.getItem("spotifyRefreshToken");
+
+  if (shouldShowAuthSelection) {
+    return (
+      <main
+        className={`overflow-hidden relative min-h-screen rounded-2xl ${mainFontClasses}`}
+        style={{
+          fontFamily:
+            "var(--font-inter), var(--font-noto-sans-sc), var(--font-noto-sans-tc), var(--font-noto-serif-jp), var(--font-noto-sans-kr), var(--font-noto-naskh-ar), var(--font-noto-sans-dv), var(--font-noto-sans-he), var(--font-noto-sans-bn), var(--font-noto-sans-ta), var(--font-noto-sans-th), var(--font-noto-sans-gk)",
+          fontOpticalSizing: "auto",
+        }}
+      >
+        <AuthSelection
+          onSelect={hookHandleAuthSelection}
+          networkStatus={networkStatus}
+        />
+      </main>
+    );
   }
 
   return (
@@ -569,97 +668,86 @@ export default function App({ Component, pageProps }) {
         fontOpticalSizing: "auto",
       }}
     >
-      {!authState.authSelectionMade &&
-      !router.pathname.includes("phone-auth") &&
-      !window.location.search.includes("code") ? (
-        <AuthSelection
-          onSelect={hookHandleAuthSelection}
+      <div
+        style={{
+          backgroundImage: generateMeshGradient([
+            currentColor1,
+            currentColor2,
+            currentColor3,
+            currentColor4,
+          ]),
+          transition: "background-image 0.5s linear",
+        }}
+        className="absolute inset-0 bg-black"
+      />
+      <div className="relative z-10">
+        <Component
+          {...pageProps}
+          accessToken={accessToken}
+          playlists={playlists}
+          recentAlbums={recentAlbums}
+          artists={artists}
+          radio={radio}
+          currentlyPlayingAlbum={currentlyPlayingAlbum}
+          activeSection={activeSection}
+          setActiveSection={setActiveSection}
+          loading={loading}
+          albumsQueue={albumsQueue}
+          currentlyPlayingTrackUri={currentlyPlayingTrackUri}
+          currentPlayback={currentPlayback}
+          fetchCurrentPlayback={fetchCurrentPlayback}
+          drawerOpen={drawerOpen}
+          setDrawerOpen={setDrawerOpen}
+          updateGradientColors={updateGradientColors}
+          handleError={handleError}
+          showBrightnessOverlay={showBrightnessOverlay}
           networkStatus={networkStatus}
         />
-      ) : (
-        <>
-          <div
-            style={{
-              backgroundImage: generateMeshGradient([
-                currentColor1,
-                currentColor2,
-                currentColor3,
-                currentColor4,
-              ]),
-              transition: "background-image 0.5s linear",
-            }}
-            className="absolute inset-0 bg-black"
-          />
-          <div className="relative z-10">
-            <Component
-              {...pageProps}
-              accessToken={accessToken}
-              playlists={playlists}
-              recentAlbums={recentAlbums}
-              artists={artists}
-              radio={radio}
-              currentlyPlayingAlbum={currentlyPlayingAlbum}
-              activeSection={activeSection}
-              setActiveSection={setActiveSection}
-              loading={loading}
-              albumsQueue={albumsQueue}
-              currentlyPlayingTrackUri={currentlyPlayingTrackUri}
-              currentPlayback={currentPlayback}
-              fetchCurrentPlayback={fetchCurrentPlayback}
-              drawerOpen={drawerOpen}
-              setDrawerOpen={setDrawerOpen}
-              updateGradientColors={updateGradientColors}
-              handleError={handleError}
-              showBrightnessOverlay={showBrightnessOverlay}
-              networkStatus={networkStatus}
-            />
-            <ErrorAlert error={error} onClose={clearError} />
-          </div>
+        <ErrorAlert error={error} onClose={clearError} />
+      </div>
 
-          {(showBrightnessOverlay || brightness) && (
+      {(showBrightnessOverlay || brightness) && (
+        <div
+          className={classNames(
+            "fixed right-0 top-[70px] transform transition-opacity duration-300 z-50",
+            {
+              "opacity-0 volumeOutScale": !showBrightnessOverlay,
+              "opacity-100 volumeInScale": showBrightnessOverlay,
+            }
+          )}
+        >
+          <div className="w-14 h-44 bg-slate-700/60 rounded-[17px] flex flex-col-reverse drop-shadow-xl overflow-hidden">
             <div
               className={classNames(
-                "fixed right-0 top-[70px] transform transition-opacity duration-300 z-50",
+                "bg-white w-full transition-all duration-200 ease-out",
                 {
-                  "opacity-0 volumeOutScale": !showBrightnessOverlay,
-                  "opacity-100 volumeInScale": showBrightnessOverlay,
+                  "rounded-b-[13px]": brightness < 250,
+                  "rounded-[13px]": brightness === 250,
                 }
               )}
+              style={{ height: `${((brightness - 5) / (250 - 5)) * 100}%` }}
             >
-              <div className="w-14 h-44 bg-slate-700/60 rounded-[17px] flex flex-col-reverse drop-shadow-xl overflow-hidden">
-                <div
-                  className={classNames(
-                    "bg-white w-full transition-all duration-200 ease-out",
-                    {
-                      "rounded-b-[13px]": brightness < 250,
-                      "rounded-[13px]": brightness === 250,
-                    }
-                  )}
-                  style={{ height: `${((brightness - 5) / (250 - 5)) * 100}%` }}
-                >
-                  <div className="absolute bottom-0 left-0 right-0 flex justify-center items-center h-6 pb-7">
-                    {(() => {
-                      const brightnessPercent =
-                        ((brightness - 5) / (250 - 5)) * 100;
-                      if (brightnessPercent >= 60)
-                        return <BrightnessHighIcon className="w-7 h-7" />;
-                      if (brightnessPercent >= 30)
-                        return <BrightnessMidIcon className="w-7 h-7" />;
-                      return <BrightnessLowIcon className="w-7 h-7" />;
-                    })()}
-                  </div>
-                </div>
+              <div className="absolute bottom-0 left-0 right-0 flex justify-center items-center h-6 pb-7">
+                {(() => {
+                  const brightnessPercent =
+                    ((brightness - 5) / (250 - 5)) * 100;
+                  if (brightnessPercent >= 60)
+                    return <BrightnessHighIcon className="w-7 h-7" />;
+                  if (brightnessPercent >= 30)
+                    return <BrightnessMidIcon className="w-7 h-7" />;
+                  return <BrightnessLowIcon className="w-7 h-7" />;
+                })()}
               </div>
             </div>
-          )}
-
-          <ButtonMappingOverlay
-            show={showMappingOverlay}
-            onClose={() => setShowMappingOverlay(false)}
-            activeButton={pressedButton}
-          />
-        </>
+          </div>
+        </div>
       )}
+
+      <ButtonMappingOverlay
+        show={showMappingOverlay}
+        onClose={() => setShowMappingOverlay(false)}
+        activeButton={pressedButton}
+      />
     </main>
   );
 }
