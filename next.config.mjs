@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'export',
   images: {
     remotePatterns: [
       {
@@ -11,8 +12,8 @@ const nextConfig = {
         hostname: "**.spotifycdn.com",
       },
     ],
-  },
-  output: "standalone",
+    unoptimized: true,
+  }
 };
 
 export default nextConfig;

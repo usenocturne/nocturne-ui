@@ -6,6 +6,7 @@ import ErrorCodes from "../../../constants/errorCodes";
 
 const QRAuthFlow = ({ onBack, onComplete }) => {
   const [deviceId, setDeviceId] = useState("");
+  const [salt, setSalt] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -14,8 +15,9 @@ const QRAuthFlow = ({ onBack, onComplete }) => {
   useEffect(() => {
     const initDevice = async () => {
       try {
-        const { deviceId } = await registerDevice();
+        const { deviceId, salt } = await registerDevice();
         setDeviceId(deviceId);
+        setSalt(salt);
         setIsLoading(false);
       } catch (err) {
         console.error("Failed to register device:", err);
@@ -36,7 +38,7 @@ const QRAuthFlow = ({ onBack, onComplete }) => {
   }, []);
 
   useEffect(() => {
-    if (!deviceId) return;
+    if (!deviceId || !salt) return;
 
     let isMounted = true;
     const pollInterval = setInterval(async () => {
@@ -94,7 +96,7 @@ const QRAuthFlow = ({ onBack, onComplete }) => {
       clearInterval(pollInterval);
       clearTimeout(timeoutId);
     };
-  }, [deviceId, onComplete, error]);
+  }, [deviceId, salt, onComplete, error]);
 
   const handleClose = () => {
     setIsExiting(true);
@@ -141,11 +143,11 @@ const QRAuthFlow = ({ onBack, onComplete }) => {
       );
     }
 
-    if (!deviceId) {
+    if (!deviceId || !salt) {
       return null;
     }
 
-    const qrUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/auth/ui/${deviceId}`;
+    const qrUrl = `${process.env.NEXT_PUBLIC_SITE_BASE_URL}/auth/link?deviceId=${deviceId}&salt=${salt}`;
 
     return (
       <div className="flex flex-col items-center space-y-8">
@@ -164,19 +166,17 @@ const QRAuthFlow = ({ onBack, onComplete }) => {
 
   return (
     <div
-      className={`fixed inset-0 z-50 transition-opacity duration-300 ${
-        isVisible && !isExiting ? "opacity-100" : "opacity-0"
-      }`}
+      className={`fixed inset-0 z-50 transition-opacity duration-300 ${isVisible && !isExiting ? "opacity-100" : "opacity-0"
+        }`}
     >
       <div className="absolute inset-0 bg-black/60" onClick={handleClose} />
       <div
-        className={`absolute top-1/2 left-1/2 -translate-x-1/2 transition-all duration-300 ${
-          isVisible && !isExiting
-            ? "-translate-y-1/2 opacity-100"
-            : isExiting
+        className={`absolute top-1/2 left-1/2 -translate-x-1/2 transition-all duration-300 ${isVisible && !isExiting
+          ? "-translate-y-1/2 opacity-100"
+          : isExiting
             ? "translate-y-[10%] opacity-0"
             : "translate-y-[10%] opacity-0"
-        }`}
+          }`}
       >
         <div className="relative bg-black/90 p-8 rounded-3xl shadow-2xl min-w-[400px] border border-white/10">
           <button

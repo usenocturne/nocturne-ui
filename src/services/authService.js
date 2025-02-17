@@ -96,7 +96,3 @@ export async function checkAuthStatus(deviceId) {
     throw error;
   }
 }
-
-export async function getAuthUrl(deviceId) {
-  return `${API_BASE_URL}/v1/auth/ui/${deviceId}`;
-}
