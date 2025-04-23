@@ -58,7 +58,6 @@ export function useSpotifyData(activeSection) {
     refreshPlaybackState,
   } = useSpotifyPlayerState(effectiveToken);
 
-  const playbackProgress = usePlaybackProgress(effectiveToken);
   const playerControls = useSpotifyPlayerControls(effectiveToken);
 
   const initializeWithFreshToken = useCallback(async () => {
@@ -732,7 +731,6 @@ export function useSpotifyData(activeSection) {
     playerIsLoading,
     playerError,
     refreshPlaybackState,
-    playbackProgress,
     playerControls,
     recentAlbums,
     userPlaylists,
