@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./useAuth";
 import { useSpotifyPlayerState } from "./useSpotifyPlayerState";
-import { usePlaybackProgress } from "./usePlaybackProgress";
 import { useSpotifyPlayerControls } from "./useSpotifyPlayerControls";
 import { networkAwareRequest } from "../utils/networkAwareRequest";
 
