@@ -278,7 +278,10 @@ const ContentView = ({
           contentData.images.length > 0 &&
           updateGradientColors
         ) {
-          updateGradientColors(contentData.images[0].url, contentType);
+          const imageUrl = (contentType === "artist" || contentType === "album") && contentData.images.length > 1
+            ? contentData.images[1].url
+            : contentData.images[0].url;
+          updateGradientColors(imageUrl, contentType);
         }
       } catch (err) {
         console.error(`Error fetching ${contentType} data:`, err);
@@ -404,6 +407,9 @@ const ContentView = ({
   const getImageUrl = () => {
     if (!content.images || !content.images.length) {
       return "/images/not-playing.webp";
+    }
+    if ((contentType === "artist" || contentType === "album") && content.images.length > 1) {
+      return content.images[1].url;
     }
     return content.images[0].url;
   };
