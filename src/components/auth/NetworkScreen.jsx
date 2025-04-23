@@ -11,7 +11,7 @@ import {
 import WiFiNetworks from "../settings/network/WiFiNetworks";
 import BluetoothDevices from "../settings/network/BluetoothDevices";
 
-const NetworkScreen = ({ isConnectionLost = true }) => {
+const NetworkScreen = ({ isConnectionLost = true, onRetryDismiss = null, isTetheringRequired = false }) => {
   const [showMain, setShowMain] = React.useState(true);
   const [showParent, setShowParent] = React.useState(false);
   const [showSubpage, setShowSubpage] = React.useState(false);
@@ -44,6 +44,8 @@ const NetworkScreen = ({ isConnectionLost = true }) => {
 
   const MAX_RECONNECT_ATTEMPTS = 5;
   const showReconnectMessage = isConnectionLost && bluetoothReconnectAttempt > 0 && bluetoothReconnectAttempt < MAX_RECONNECT_ATTEMPTS;
+  const reconnectFailed = isConnectionLost && bluetoothReconnectAttempt >= MAX_RECONNECT_ATTEMPTS;
+  const showTetheringMessage = isTetheringRequired || reconnectFailed;
 
   const [mainClasses, setMainClasses] = React.useState(
     "translate-x-0 opacity-100"
@@ -94,6 +96,8 @@ const NetworkScreen = ({ isConnectionLost = true }) => {
   const openNetworkSettings = () => {
     if (isAnimating) return;
     setIsAnimating(true);
+
+    onRetryDismiss?.();
 
     setMainClasses("-translate-x-full opacity-0");
     setParentClasses("translate-x-0 opacity-100");
@@ -213,6 +217,12 @@ const NetworkScreen = ({ isConnectionLost = true }) => {
                     <div className="space-y-2">
                       <p className="text-[28px] text-white/60 tracking-tight w-[32rem]">
                         Attempting to reconnect...
+                      </p>
+                    </div>
+                  ) : showTetheringMessage ? (
+                    <div className="space-y-2">
+                      <p className="text-[28px] text-white/60 tracking-tight w-[32rem]">
+                        Please enable Bluetooth Tethering on your phone.
                       </p>
                     </div>
                   ) : (

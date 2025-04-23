@@ -247,6 +247,18 @@ function App() {
   const [selectedNetwork, setSelectedNetwork] = useState(null);
   const [showConnectorModal, setShowConnectorModal] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
+  const [isTetheringRequired, setIsTetheringRequired] = useState(false);
+
+  useEffect(() => {
+    const handleTetheringRequired = (event) => {
+      setIsTetheringRequired(event.detail.required);
+    };
+
+    window.addEventListener('tetheringRequired', handleTetheringRequired);
+    return () => {
+      window.removeEventListener('tetheringRequired', handleTetheringRequired);
+    };
+  }, []);
 
   useEffect(() => {
     const handleNetworkBannerShow = () => {
@@ -430,6 +442,7 @@ function App() {
   useEffect(() => {
     if (showTetheringScreen) {
       enableNetworking();
+      setShowBanner(true);
     }
   }, [showTetheringScreen, enableNetworking]);
 
@@ -587,22 +600,29 @@ function App() {
 
                     <div className="relative z-10">
                       {content}
-                      {showNoNetwork && !isFlashing && !showTetheringScreen && (
-                        <NetworkScreen />
-                      )}
-                      {pairingRequest && (
-                        <PairingScreen
-                          pin={pairingRequest.pairingKey}
-                          isConnecting={isConnecting}
-                          onAccept={acceptPairing}
-                          onReject={denyPairing}
-                        />
-                      )}
-                      {!isConnected && !isFlashing && lastConnectedDevice && (
-                        <NetworkScreen
-                          deviceName={lastConnectedDevice.name}
-                          onRetryDismiss={stopRetrying}
-                        />
+                      {!isFlashing && !showTetheringScreen && (
+                        <>
+                          {pairingRequest ? (
+                            <PairingScreen
+                              pin={pairingRequest.pairingKey}
+                              isConnecting={isConnecting}
+                              onAccept={acceptPairing}
+                              onReject={denyPairing}
+                            />
+                          ) : !isConnected && lastConnectedDevice ? (
+                            <NetworkScreen
+                              deviceName={lastConnectedDevice.name}
+                              isConnectionLost={true}
+                              isTetheringRequired={isTetheringRequired}
+                              onRetryDismiss={stopRetrying}
+                            />
+                          ) : showNoNetwork ? (
+                            <NetworkScreen 
+                              isConnectionLost={true}
+                              isTetheringRequired={isTetheringRequired}
+                            />
+                          ) : null}
+                        </>
                       )}
                       <NetworkBanner 
                         visible={showNetworkBanner} 
