@@ -238,9 +238,7 @@ function useGlobalButtonMapping({
 
 function App() {
   const [showTutorial, setShowTutorial] = useState(false);
-  const [activeSection, setActiveSection] = useState(() => {
-    return localStorage.getItem("lastActiveSection") || "recents";
-  });
+  const [activeSection, setActiveSection] = useState("nowPlaying");
   const [viewingContent, setViewingContent] = useState(null);
   const [isDeviceSwitcherOpen, setIsDeviceSwitcherOpen] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState(null);

@@ -11,7 +11,7 @@ let eventSubscribers = [];
 let lastFetchTimestamp = 0;
 let pendingFetch = null;
 
-export function useSpotifyPlayerState(accessToken) {
+export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
   const [currentPlayback, setCurrentPlayback] = useState(null);
   const [currentlyPlayingAlbum, setCurrentlyPlayingAlbum] = useState(null);
   const [albumChangeEvent, setAlbumChangeEvent] = useState(null);
@@ -312,47 +312,19 @@ export function useSpotifyPlayerState(accessToken) {
 
   useEffect(() => {
     if (accessToken) {
-      connectionErrors = 0;
-      initialStateLoadedRef.current = false;
-
-      const handleNetworkRestored = async () => {
-        if (accessToken) {
-          connectionErrors = 0;
-          isConnecting = false;
-          initialStateLoadedRef.current = false;
-          
-          cleanupWebSocket();
-          
-          try {
-            await fetchCurrentPlayback(true);
-
-            setTimeout(() => {
-              connectWebSocket();
-            }, 500);
-
-          } catch (error) {
-            connectWebSocket();
-          }
-        }
-      };
-
-      window.addEventListener('networkRestored', handleNetworkRestored);
-      window.addEventListener('online', handleNetworkRestored);
-      
-      fetchCurrentPlayback();
       connectWebSocket();
-
-      return () => {
-        window.removeEventListener('networkRestored', handleNetworkRestored);
-        window.removeEventListener('online', handleNetworkRestored);
-        cleanupWebSocket();
-      };
+      fetchCurrentPlayback(true);
     }
-
     return () => {
       cleanupWebSocket();
     };
-  }, [accessToken, fetchCurrentPlayback, connectWebSocket, cleanupWebSocket]);
+  }, [accessToken, connectWebSocket, cleanupWebSocket, fetchCurrentPlayback]);
+
+  useEffect(() => {
+    if (accessToken && immediateLoad && !initialStateLoadedRef.current) {
+      fetchCurrentPlayback(true);
+    }
+  }, [accessToken, immediateLoad, fetchCurrentPlayback]);
 
   return {
     currentPlayback,

@@ -300,6 +300,10 @@ const ContentView = ({
     } else {
       navigate(-1);
     }
+    
+    if (currentPlayback?.item) {
+      onNavigateToNowPlaying();
+    }
   }
 
   const handleTrackPlay = async (track, index) => {

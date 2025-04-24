@@ -27,13 +27,13 @@ import {
 } from "../common/icons";
 import { useNetwork } from "../../hooks/useNetwork";
 
-const NowPlaying = ({
+export default function NowPlaying({
   accessToken,
   currentPlayback,
   onClose,
   updateGradientColors,
-  onOpenDeviceSwitcher,
-}) => {
+  onOpenDeviceSwitcher
+}) {
   const [isLiked, setIsLiked] = useState(false);
   const [isCheckingLike, setIsCheckingLike] = useState(false);
   const [isProgressScrubbing, setIsProgressScrubbing] = useState(false);
@@ -413,6 +413,12 @@ const NowPlaying = ({
     );
   }, [currentPlayback?.is_playing]);
 
+  const handleBackNavigation = () => {
+    if (onClose) {
+      onClose();
+    }
+  };
+
   return (
     <div
       className="flex flex-col gap-1 h-screen w-full z-10 fadeIn-animation"
@@ -644,6 +650,4 @@ const NowPlaying = ({
       </div>
     </div>
   );
-};
-
-export default NowPlaying;
+}
