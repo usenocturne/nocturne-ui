@@ -10,6 +10,8 @@ let retryTimeout = null;
 let eventSubscribers = [];
 let lastFetchTimestamp = 0;
 let pendingFetch = null;
+let keepAliveInterval = null;
+let isInitialized = false;
 
 export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
   const [currentPlayback, setCurrentPlayback] = useState(null);
@@ -138,31 +140,36 @@ export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
   }, [processPlaybackState]);
 
   const cleanupWebSocket = useCallback(() => {
-    connectionCount--;
+    connectionCount = Math.max(0, connectionCount - 1);
 
     if (connectionCount <= 0) {
-      connectionCount = 0;
-
-      if (globalWebSocket) {
-        globalWebSocket.onclose = null;
-        globalWebSocket.onerror = null;
-        globalWebSocket.onmessage = null;
-        globalWebSocket.onopen = null;
-
-        if (
-          globalWebSocket.readyState === WebSocket.OPEN ||
-          globalWebSocket.readyState === WebSocket.CONNECTING
-        ) {
-          globalWebSocket.close();
-        }
-        globalWebSocket = null;
-        globalConnectionId = null;
-      }
-
       if (retryTimeout) {
         clearTimeout(retryTimeout);
-        retryTimeout = null;
       }
+      
+      retryTimeout = setTimeout(() => {
+        if (connectionCount <= 0 && globalWebSocket) {
+          if (keepAliveInterval) {
+            clearInterval(keepAliveInterval);
+            keepAliveInterval = null;
+          }
+          
+          globalWebSocket.onclose = null;
+          globalWebSocket.onerror = null;
+          globalWebSocket.onmessage = null;
+          globalWebSocket.onopen = null;
+
+          if (
+            globalWebSocket.readyState === WebSocket.OPEN ||
+            globalWebSocket.readyState === WebSocket.CONNECTING
+          ) {
+            globalWebSocket.close();
+          }
+          globalWebSocket = null;
+          globalConnectionId = null;
+          isInitialized = false;
+        }
+      }, 300000);
     }
 
     webSocketRef.current = null;
@@ -185,7 +192,13 @@ export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
       return;
     }
 
+    if (isInitialized && globalWebSocket && globalWebSocket.readyState === WebSocket.CONNECTING) {
+      webSocketRef.current = globalWebSocket;
+      return;
+    }
+
     isConnecting = true;
+    isInitialized = true;
 
     if (globalWebSocket) {
       globalWebSocket.onclose = null;
@@ -219,14 +232,19 @@ export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
           isConnecting = false;
           connectionErrors = 0;
 
-          const pingIntervalId = setInterval(() => {
+          if (keepAliveInterval) {
+            clearInterval(keepAliveInterval);
+          }
+          
+          keepAliveInterval = setInterval(() => {
             if (
               globalWebSocket &&
               globalWebSocket.readyState === WebSocket.OPEN
             ) {
               globalWebSocket.send(JSON.stringify({ type: "ping" }));
             } else {
-              clearInterval(pingIntervalId);
+              clearInterval(keepAliveInterval);
+              keepAliveInterval = null;
             }
           }, 15000);
         };
@@ -236,7 +254,9 @@ export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
 
           if ("headers" in message && message.headers["Spotify-Connection-Id"]) {
             globalConnectionId = message.headers["Spotify-Connection-Id"];
-            connectionIdRef.current = globalConnectionId;            try {
+            connectionIdRef.current = globalConnectionId;
+            
+            try {
               const url = `https://api.spotify.com/v1/me/notifications/player?connection_id=${encodeURIComponent(
                 globalConnectionId
               )}`;
@@ -251,33 +271,34 @@ export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
                 })
               );
 
-            if (!initialStateLoadedRef.current) {
-              await fetchCurrentPlayback();
+              if (!initialStateLoadedRef.current) {
+                await fetchCurrentPlayback();
+              }
+            } catch (error) {
+              console.error("Error setting up notifications:", error);
             }
-          } catch (error) {
-            console.error("Error setting up notifications:", error);
-          }
-        } else if (message.type === "message" && message.payloads) {
-          for (const payload of message.payloads) {
-            if (payload.events) {
-              for (const eventData of payload.events) {
-                if (
-                  eventData.type === "PLAYER_STATE_CHANGED" &&
-                  eventData.event?.state
-                ) {
-                  eventSubscribers.forEach((subscriber) => {
-                    if (subscriber.onPlaybackState) {
-                      subscriber.onPlaybackState(eventData.event.state);
-                    }
-                  });
+          } else if (message.type === "message" && message.payloads) {
+            for (const payload of message.payloads) {
+              if (payload.events) {
+                for (const eventData of payload.events) {
+                  if (
+                    eventData.type === "PLAYER_STATE_CHANGED" &&
+                    eventData.event?.state
+                  ) {
+                    eventSubscribers.forEach((subscriber) => {
+                      if (subscriber.onPlaybackState) {
+                        subscriber.onPlaybackState(eventData.event.state);
+                      }
+                    });
+                  }
                 }
               }
             }
           }
-        }
-      };
+        };
 
-        globalWebSocket.onerror = () => {
+        globalWebSocket.onerror = (error) => {
+          console.error('WebSocket error:', error);
           isConnecting = false;
           connectionErrors += 1;
 
@@ -286,7 +307,8 @@ export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
           }
         };
 
-        globalWebSocket.onclose = () => {
+        globalWebSocket.onclose = (event) => {
+          console.log(`WebSocket closed with code ${event.code}. Reason: ${event.reason}`);
           isConnecting = false;
 
           if (connectionErrors <= 3 && connectionCount > 0) {
@@ -295,16 +317,17 @@ export function useSpotifyPlayerState(accessToken, immediateLoad = false) {
               30000
             );
 
-            if (!initialStateLoadedRef.current) {
-              retryTimeout = setTimeout(() => {
+            retryTimeout = setTimeout(() => {
+              if (connectionCount > 0) {
                 networkAwareRequest(() => fetchCurrentPlayback());
                 connectWebSocket();
-              }, backoffTime);
-            }
+              }
+            }, backoffTime);
           }
         };
       });
     } catch (error) {
+      console.error('Error creating WebSocket:', error);
       isConnecting = false;
       connectionErrors += 1;
     }
