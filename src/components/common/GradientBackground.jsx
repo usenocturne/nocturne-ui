@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { useGradientTransition } from '../../hooks/useGradientTransition';
+import classNames from 'classnames';
 
 const GradientBackground = ({
   gradientState = {
     imageURL: null,
     section: null,
   },
+  className = ""
 }) => {
   const {
     currentColor1,
@@ -31,7 +33,7 @@ const GradientBackground = ({
         ]),
         transition: 'background-image 0.5s linear',
       }}
-      className="absolute inset-0"
+      className={classNames("absolute", "inset-0", className)}
     />
   );
 };

@@ -262,7 +262,7 @@ const Tutorial = ({ onComplete }) => {
 
   return (
     <div className="fixed inset-0 w-full h-full" ref={tutorialContainerRef}>
-      <GradientBackground gradientState={gradientState} />
+      <GradientBackground gradientState={gradientState} className="rounded-2xl" />
 
       <div className="relative h-full z-10 flex justify-between px-6">
         <div className="flex flex-col items-start w-1/2 -mr-6 ml-12 flex-1 justify-center">

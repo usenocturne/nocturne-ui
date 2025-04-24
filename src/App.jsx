@@ -583,7 +583,7 @@ function App() {
                     fontOpticalSizing: "auto",
                   }}
                 >
-                  <GradientBackground gradientState={gradientState} />
+                  <GradientBackground gradientState={gradientState} className="bg-black" />
 
                   <div className="relative z-10">
                     {content}
