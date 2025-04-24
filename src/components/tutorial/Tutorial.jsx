@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import TutorialFrame from "./TutorialFrame";
 import NocturneIcon from "../common/icons/NocturneIcon";
-import GradientBackground from "./components/common/GradientBackground";
+import GradientBackground from "../common/GradientBackground";
 import { useGradientState } from "../../hooks/useGradientState";
 import { useNavigation } from "../../hooks/useNavigation";
 

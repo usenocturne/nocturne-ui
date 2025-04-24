@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useGradientState } from "../../hooks/useGradientState";
 import { useAuth } from "../../hooks/useAuth";
 import NocturneIcon from "../common/icons/NocturneIcon";
-import GradientBackground from "./components/common/GradientBackground";
+import GradientBackground from "../common/GradientBackground";
 import QRCodeDisplay from "./QRCodeDisplay";
 import { checkNetworkConnectivity } from "../../utils/networkChecker";
 

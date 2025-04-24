@@ -10,7 +10,7 @@ import {
 } from "../common/icons";
 import WiFiNetworks from "../settings/network/WiFiNetworks";
 import BluetoothDevices from "../settings/network/BluetoothDevices";
-import GradientBackground from "./components/common/GradientBackground";
+import GradientBackground from "../common/GradientBackground";
 
 const NetworkScreen = ({ isConnectionLost = true, onRetryDismiss = null, isTetheringRequired = false }) => {
   const [showMain, setShowMain] = React.useState(true);

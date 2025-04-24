@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useGradientState } from "../../hooks/useGradientState";
 import { NocturneIcon } from "../common/icons";
-import GradientBackground from "./components/common/GradientBackground";
+import GradientBackground from "../common/GradientBackground";
 
 const PairingScreen = ({ onAccept, onReject, pin, isConnecting }) => {
   const [gradientState, updateGradientColors] = useGradientState();
