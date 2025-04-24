@@ -41,9 +41,17 @@ export default function Home({
     enableWheelNavigation: true,
     enableKeyboardNavigation: false,
     enableItemSelection: false,
+    enableEscapeKey: activeSection !== "nowPlaying" && activeSection !== "settings",
     itemWidth: itemWidth,
     itemGap: 40,
-    currentlyPlayingId: currentlyPlayingAlbum?.id
+    currentlyPlayingId: currentlyPlayingAlbum?.id,
+    onEscape: () => {
+      if (activeSection === "recents") {
+        setActiveSection("nowPlaying");
+      } else if (activeSection !== "nowPlaying" && activeSection !== "settings") {
+        setActiveSection("recents");
+      }
+    }
   });
 
   useEffect(() => {

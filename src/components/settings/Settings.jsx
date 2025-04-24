@@ -373,6 +373,9 @@ export default function Settings({
         setActiveParent(null);
         setIsAnimating(false);
       }, ANIMATION_DURATION);
+    } else {
+      shouldExitToRecents.current = true;
+      setActiveSection("recents");
     }
   };
 
@@ -477,6 +480,9 @@ export default function Settings({
           navigateBack();
         } else if (showParent) {
           navigateBack();
+        } else {
+          shouldExitToRecents.current = true;
+          setActiveSection("recents");
         }
 
         setTimeout(() => {
@@ -489,7 +495,7 @@ export default function Settings({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isAnimating, showSubpage, showParent]);
+  }, [isAnimating, showSubpage, showParent, setActiveSection]);
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden settings-scroll-container">
