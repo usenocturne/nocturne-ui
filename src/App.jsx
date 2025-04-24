@@ -18,7 +18,7 @@ import { useGradientState } from "./hooks/useGradientState";
 import { DeviceSwitcherContext } from "./hooks/useSpotifyPlayerControls";
 import { useBluetooth, useSystemUpdate } from "./hooks/useNocturned";
 import { useSpotifyData } from "./hooks/useSpotifyData";
-import { SettingsProvider } from "./contexts/SettingsContext";
+import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
 import { ConnectorProvider } from "./contexts/ConnectorContext";
 import React from "react";
 import PairingScreen from "./components/auth/PairingScreen";
@@ -238,7 +238,7 @@ function useGlobalButtonMapping({
 
 function App() {
   const [showTutorial, setShowTutorial] = useState(false);
-  const [activeSection, setActiveSection] = useState("nowPlaying");
+  const [activeSection, setActiveSection] = useState("recents");
   const [viewingContent, setViewingContent] = useState(null);
   const [isDeviceSwitcherOpen, setIsDeviceSwitcherOpen] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState(null);
@@ -394,6 +394,15 @@ function App() {
       setShowTutorial(!hasSeenTutorial);
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const startWithNowPlaying = localStorage.getItem("startWithNowPlaying") === "true";
+      if (startWithNowPlaying && !viewingContent) {
+        setActiveSection("nowPlaying");
+      }
+    }
+  }, [isAuthenticated, viewingContent]);
 
   useEffect(() => {
     if (activeSection === "recents" && recentAlbums.length > 0) {
