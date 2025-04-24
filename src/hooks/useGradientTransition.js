@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { extractColorsFromImage } from "../utils/colorExtractor";
 
-export function useGradientState(activeSection) {
+export function useGradientTransition(activeSection) {
   const [currentColor1, setCurrentColor1] = useState("#191414");
   const [currentColor2, setCurrentColor2] = useState("#191414");
   const [currentColor3, setCurrentColor3] = useState("#191414");
