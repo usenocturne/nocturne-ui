@@ -8,7 +8,9 @@ import {
 const authInitializationState = {
   initializing: false,
   refreshing: false,
-  lastRefreshTime: 0
+  lastRefreshTime: 0,
+  pendingRefresh: null,
+  lastRefreshPromise: null
 };
 
 export function useAuth() {
@@ -30,51 +32,73 @@ export function useAuth() {
       if (!storedRefreshToken) return false;
 
       const now = Date.now();
-      if (now - authInitializationState.lastRefreshTime < 5000) {
+      
+      if (now - authInitializationState.lastRefreshTime < 10000) {
         return true;
       }
 
-      if (authInitializationState.refreshing) return false;
-      authInitializationState.refreshing = true;
-
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-        currentDeviceCodeRef.current = null;
+      if (authInitializationState.lastRefreshPromise && now - authInitializationState.lastRefreshTime < 15000) {
+        return authInitializationState.lastRefreshPromise;
       }
 
-      const data = await refreshAccessToken(storedRefreshToken);
-
-      if (data.access_token) {
-        setAccessToken(data.access_token);
-        localStorage.setItem("spotifyAccessToken", data.access_token);
-
-        if (data.refresh_token) {
-          localStorage.setItem("spotifyRefreshToken", data.refresh_token);
-          setRefreshToken(data.refresh_token);
+      authInitializationState.refreshing = true;
+      
+      const refreshPromise = (async () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+          currentDeviceCodeRef.current = null;
         }
 
-        const expiryDate = new Date();
-        expiryDate.setSeconds(
-          expiryDate.getSeconds() + (data.expires_in || 3600) - 600
-        );
-        localStorage.setItem("spotifyTokenExpiry", expiryDate.toISOString());
+        try {
+          const data = await refreshAccessToken(storedRefreshToken);
 
-        setIsAuthenticated(true);
-        scheduleTokenRefresh(expiryDate);
+          if (data.access_token) {
+            setAccessToken(data.access_token);
+            localStorage.setItem("spotifyAccessToken", data.access_token);
 
-        authInitializationState.refreshing = false;
-        authInitializationState.lastRefreshTime = now;
-        return true;
-      }
-      authInitializationState.refreshing = false;
-      return false;
+            if (data.refresh_token) {
+              localStorage.setItem("spotifyRefreshToken", data.refresh_token);
+              setRefreshToken(data.refresh_token);
+            }
+
+            const expiryDate = new Date();
+            expiryDate.setSeconds(
+              expiryDate.getSeconds() + 3000
+            );
+            localStorage.setItem(
+              "spotifyTokenExpiry",
+              expiryDate.toISOString()
+            );
+
+            setIsAuthenticated(true);
+            scheduleTokenRefresh(expiryDate);
+
+            authInitializationState.refreshing = false;
+            authInitializationState.lastRefreshTime = Date.now();
+            return true;
+          }
+          return false;
+        } catch (err) {
+          console.error("Token refresh failed:", err);
+          if (err.message?.includes("invalid_grant")) {
+            logout();
+          }
+          return false;
+        } finally {
+          authInitializationState.refreshing = false;
+          if (authInitializationState.lastRefreshPromise === refreshPromise) {
+            authInitializationState.lastRefreshPromise = null;
+          }
+        }
+      })();
+      
+      authInitializationState.lastRefreshPromise = refreshPromise;
+      return refreshPromise;
     } catch (err) {
       console.error("Token refresh failed:", err);
-      if (err.message?.includes("invalid_grant")) {
-        logout();
-      }
       authInitializationState.refreshing = false;
+      authInitializationState.lastRefreshPromise = null;
       return false;
     }
   }, []);
@@ -94,7 +118,10 @@ export function useAuth() {
       );
 
       if (timeUntilRefresh < 60000) {
-        refreshTokens();
+        const timeSinceLastRefresh = Date.now() - authInitializationState.lastRefreshTime;
+        if (timeSinceLastRefresh > 10000) {
+          refreshTokens();
+        }
         return;
       }
 
