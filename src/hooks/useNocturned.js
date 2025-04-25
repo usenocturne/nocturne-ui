@@ -509,18 +509,15 @@ export const useBluetooth = () => {
       fetch(`${API_BASE}/bluetooth/devices`)
         .then(response => response.json())
         .then(devices => {
-          const isAlreadyConnected = devices.some(device => 
-            device.address === lastDeviceAddress && device.connected
-          );
-          
-          if (!isAlreadyConnected) {
+          const device = devices.find(d => d.address === lastDeviceAddress);
+          if (!device || !device.connected) {
             resetConnectionState();
             const bootMode = true;
             setTimeout(() => {
               attemptReconnect(false, bootMode);
             }, INITIAL_RECONNECT_DELAY);
           } else {
-            handleSuccessfulConnection();
+            startNetworkPolling(lastDeviceAddress);
           }
         })
         .catch(error => {
@@ -599,18 +596,26 @@ export const useBluetooth = () => {
     
     stopNetworkPolling();
     stopRetrying();
+    
     retryIsCancelled = false;
     reconnectAttemptsRef.current = 0;
     setReconnectAttempt(0);
-    
+    requestInFlightRef.current = false;
     isNetworkPollingActive = true;
     window.dispatchEvent(new CustomEvent('tetheringRequired', { detail: { required: true } }));
     
     const attemptNetworkConnection = async () => {
-      if (globalStopReconnection || !isNetworkPollingActive || requestInFlightRef.current) return false;
+      if (globalStopReconnection || !isNetworkPollingActive) {
+        return false;
+      }
+      
+      if (requestInFlightRef.current) {
+        return false;
+      }
+
+      requestInFlightRef.current = true;
       
       try {
-        requestInFlightRef.current = true;
         const response = await fetch(`${API_BASE}/bluetooth/connect/${deviceAddress}`, {
           method: 'POST'
         });
@@ -618,41 +623,58 @@ export const useBluetooth = () => {
         if (response.ok) {
           window.dispatchEvent(new CustomEvent('tetheringRequired', { detail: { required: false } }));
           isNetworkPollingActive = false;
-          clearInterval(networkPollRef.current);
-          networkPollRef.current = null;
+          
+          if (networkPollRef.current) {
+            clearInterval(networkPollRef.current);
+            networkPollRef.current = null;
+          }
+          
+          requestInFlightRef.current = false;
           return true;
         }
+        
+        throw new Error('Network connection failed with status: ' + response.status);
       } catch (error) {
-        if (isNetworkPollingActive) {
-          console.log('Network connection attempt failed, retrying...');
-        }
-      } finally {
+        console.error('Network connection attempt failed:', error.message);
         requestInFlightRef.current = false;
+        return false;
       }
-      return false;
     };
 
-    networkPollRef.current = setInterval(async () => {
-      if (!isNetworkPollingActive) {
-        clearInterval(networkPollRef.current);
-        networkPollRef.current = null;
-        return;
-      }
-      const success = await attemptNetworkConnection();
-      if (success) {
-        isNetworkPollingActive = false;
-      }
-    }, 2000);
-    
     const success = await attemptNetworkConnection();
-    if (success) {
-      isNetworkPollingActive = false;
+    
+    if (success || !isNetworkPollingActive) {
+      return;
+    }
+
+    if (networkPollRef.current) {
       clearInterval(networkPollRef.current);
       networkPollRef.current = null;
     }
-    
-    setNetworkStartRef(Date.now());
-  }, []);
+
+    if (!networkPollRef.current) {
+      networkPollRef.current = setInterval(async () => {
+        if (!isNetworkPollingActive) {
+          clearInterval(networkPollRef.current);
+          networkPollRef.current = null;
+          return;
+        }
+        
+        if (requestInFlightRef.current) {
+          return;
+        }
+
+        const pollSuccess = await attemptNetworkConnection();
+        if (pollSuccess) {
+          clearInterval(networkPollRef.current);
+          networkPollRef.current = null;
+          isNetworkPollingActive = false;
+        }
+      }, 2000);
+      
+      networkStartRef.current = Date.now();
+    }
+  }, [stopNetworkPolling, stopRetrying]);
 
   const connectDevice = useCallback(async (deviceAddress) => {
     try {
@@ -667,6 +689,7 @@ export const useBluetooth = () => {
       if (requestInFlightRef.current) {
         return false;
       }
+      
       requestInFlightRef.current = true;
       const response = await fetch(`${API_BASE}/bluetooth/connect/${deviceAddress}`, {
         method: 'POST',
@@ -815,34 +838,21 @@ export const useBluetooth = () => {
         break;
 
       case 'bluetooth/paired':
-        console.log('Bluetooth paired event received:', data.payload.device);
         setPairingRequest(null);
         setConnectedDevices(prev => [...prev, data.payload.device]);
         setLastConnectedDevice(data.payload.device);
         const deviceAddr = data.payload.device.address;
         localStorage.setItem('lastConnectedBluetoothDevice', deviceAddr);
+        
         resetConnectionState();
         
+        startNetworkPolling(deviceAddr);
+        
         window.dispatchEvent(new CustomEvent('tetheringRequired', { detail: { required: true } }));
-        setTimeout(() => {
-          attemptReconnect(true);
-        }, 500);
         break;
 
       case 'bluetooth/connect':
         handleSuccessfulConnection();
-        break;
-
-      case 'bluetooth/network/disconnect':
-        if (!retryIsCancelled && !globalStopReconnection) {
-          window.dispatchEvent(new Event('offline'));
-          window.dispatchEvent(new CustomEvent('tetheringRequired', { detail: { required: true } }));
-          resetConnectionState();
-          
-          setTimeout(() => {
-            attemptReconnect(true);
-          }, INITIAL_RECONNECT_DELAY);
-        }
         break;
 
       default:
