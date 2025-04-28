@@ -254,6 +254,7 @@ function App() {
     const handleBrightnessKeyDown = (e) => {
       if (e.key.toLowerCase() === 'm' && !showBrightnessOverlay) {
         e.preventDefault();
+        e.stopPropagation();
         setShowBrightnessOverlay(true);
       }
     };
@@ -262,11 +263,11 @@ function App() {
       setShowBrightnessOverlay(false);
     };
 
-    window.addEventListener('keydown', handleBrightnessKeyDown);
+    document.addEventListener('keydown', handleBrightnessKeyDown, { capture: true });
     window.addEventListener('brightness-overlay-dismiss', handleOverlayDismiss);
     
     return () => {
-      window.removeEventListener('keydown', handleBrightnessKeyDown);
+      document.removeEventListener('keydown', handleBrightnessKeyDown, { capture: true });
       window.removeEventListener('brightness-overlay-dismiss', handleOverlayDismiss);
     };
   }, [showBrightnessOverlay]);
