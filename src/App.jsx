@@ -12,6 +12,7 @@ import NetworkPasswordModal from "./components/common/modals/NetworkPasswordModa
 import ConnectorQRModal from "./components/common/modals/ConnectorQRModal";
 import SystemUpdateModal from "./components/common/modals/SystemUpdateModal";
 import ButtonMappingOverlay from "./components/common/overlays/ButtonMappingOverlay";
+import BrightnessOverlay from "./components/common/overlays/BrightnessOverlay";
 import NetworkBanner from "./components/common/overlays/NetworkBanner";
 import GradientBackground from "./components/common/GradientBackground";
 import { useNetwork } from "./hooks/useNetwork";
@@ -246,7 +247,30 @@ function App() {
   const [showConnectorModal, setShowConnectorModal] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
   const [isTetheringRequired, setIsTetheringRequired] = useState(false);
+  const [brightness, setBrightness] = useState(160);
+  const [showBrightnessOverlay, setShowBrightnessOverlay] = useState(false);
 
+  useEffect(() => {
+    const handleBrightnessKeyDown = (e) => {
+      if (e.key.toLowerCase() === 'm' && !showBrightnessOverlay) {
+        e.preventDefault();
+        setShowBrightnessOverlay(true);
+      }
+    };
+    
+    const handleOverlayDismiss = () => {
+      setShowBrightnessOverlay(false);
+    };
+
+    window.addEventListener('keydown', handleBrightnessKeyDown);
+    window.addEventListener('brightness-overlay-dismiss', handleOverlayDismiss);
+    
+    return () => {
+      window.removeEventListener('keydown', handleBrightnessKeyDown);
+      window.removeEventListener('brightness-overlay-dismiss', handleOverlayDismiss);
+    };
+  }, [showBrightnessOverlay]);
+  
   useEffect(() => {
     const handleTetheringRequired = (event) => {
       setIsTetheringRequired(event.detail.required);
@@ -569,88 +593,85 @@ function App() {
   }
 
   return (
-    <ConnectorProvider>
-      <SettingsProvider>
-        <DeviceSwitcherContext.Provider value={deviceSwitcherContextValue}>
-          <NetworkContext.Provider value={networkContextValue}>
-            <ConnectorContext.Provider value={connectorContextValue}>
-              <Router>
-                <FontLoader />
-                <main
-                  className="overflow-hidden relative min-h-screen rounded-2xl"
-                  style={{
-                    fontFamily: `var(--font-inter), var(--font-noto-sans-sc), var(--font-noto-sans-tc), var(--font-noto-serif-jp), var(--font-noto-sans-kr), var(--font-noto-naskh-ar), var(--font-noto-sans-bn), var(--font-noto-sans-dv), var(--font-noto-sans-he), var(--font-noto-sans-ta), var(--font-noto-sans-th), var(--font-noto-sans-gk), system-ui, sans-serif`,
-                    fontOpticalSizing: "auto",
-                  }}
-                >
-                  <GradientBackground gradientState={gradientState} className="bg-black" />
-
-                  <div className="relative z-10">
-                    {content}
-                    {!isFlashing && !showTetheringScreen && (
-                      <>
-                        {pairingRequest ? (
-                          <PairingScreen
-                            pin={pairingRequest.pairingKey}
-                            isConnecting={isConnecting}
-                            onAccept={acceptPairing}
-                            onReject={denyPairing}
-                          />
-                        ) : !isConnected && lastConnectedDevice ? (
-                          <NetworkScreen
-                            deviceName={lastConnectedDevice.name}
-                            isConnectionLost={true}
-                            isTetheringRequired={isTetheringRequired}
-                            onRetryDismiss={stopRetrying}
-                          />
-                        ) : showNoNetwork ? (
-                          <NetworkScreen
-                            isConnectionLost={true}
-                            isTetheringRequired={isTetheringRequired}
-                          />
-                        ) : null}
-                      </>
-                    )}
-                    <NetworkBanner
-                      visible={showNetworkBanner}
-                      onClose={dismissNetworkBanner}
+    <Router>
+      <ConnectorProvider>
+        <SettingsProvider>
+          <DeviceSwitcherContext.Provider value={deviceSwitcherContextValue}>
+            <NetworkContext.Provider value={networkContextValue}>
+              <ConnectorContext.Provider value={connectorContextValue}>
+                <div className="flex flex-col h-screen w-screen overflow-hidden bg-black">
+                  <GradientBackground gradientState={gradientState} />
+                  <FontLoader />
+                  {content}
+                  {!isFlashing && !showTetheringScreen && (
+                    <>
+                      {pairingRequest ? (
+                        <PairingScreen
+                          pin={pairingRequest.pairingKey}
+                          isConnecting={isConnecting}
+                          onAccept={acceptPairing}
+                          onReject={denyPairing}
+                        />
+                      ) : !isConnected && lastConnectedDevice ? (
+                        <NetworkScreen
+                          deviceName={lastConnectedDevice.name}
+                          isConnectionLost={true}
+                          isTetheringRequired={isTetheringRequired}
+                          onRetryDismiss={stopRetrying}
+                        />
+                      ) : showNoNetwork ? (
+                        <NetworkScreen
+                          isConnectionLost={true}
+                          isTetheringRequired={isTetheringRequired}
+                        />
+                      ) : null}
+                    </>
+                  )}
+                  <NetworkBanner
+                    visible={showNetworkBanner}
+                    onClose={dismissNetworkBanner}
+                  />
+                  <SystemUpdateModal
+                    show={isFlashing}
+                    status={updateStatus}
+                    progress={progress}
+                    isError={isError}
+                    errorMessage={errorMessage}
+                  />
+                  <DeviceSwitcherModal
+                    isOpen={isDeviceSwitcherOpen}
+                    onClose={handleCloseDeviceSwitcher}
+                    accessToken={accessToken}
+                  />
+                  <NetworkPasswordModal
+                    network={selectedNetwork}
+                    onClose={handleNetworkClose}
+                    onConnect={handleNetworkClose}
+                  />
+                  {showConnectorModal && (
+                    <ConnectorQRModal
+                      onClose={() => setShowConnectorModal(false)}
                     />
-                    <SystemUpdateModal
-                      show={isFlashing}
-                      status={updateStatus}
-                      progress={progress}
-                      isError={isError}
-                      errorMessage={errorMessage}
+                  )}
+                  {!showTutorial && showGlobalMappingOverlay && (
+                    <ButtonMappingOverlay
+                      show={showGlobalMappingOverlay}
+                      activeButton={globalActiveButton}
                     />
-                    <DeviceSwitcherModal
-                      isOpen={isDeviceSwitcherOpen}
-                      onClose={handleCloseDeviceSwitcher}
-                      accessToken={accessToken}
-                    />
-                    <NetworkPasswordModal
-                      network={selectedNetwork}
-                      onClose={handleNetworkClose}
-                      onConnect={handleNetworkClose}
-                    />
-                    {showConnectorModal && (
-                      <ConnectorQRModal
-                        onClose={() => setShowConnectorModal(false)}
-                      />
-                    )}
-                    {!showTutorial && showGlobalMappingOverlay && (
-                      <ButtonMappingOverlay
-                        show={showGlobalMappingOverlay}
-                        activeButton={globalActiveButton}
-                      />
-                    )}
-                  </div>
-                </main>
-              </Router>
-            </ConnectorContext.Provider>
-          </NetworkContext.Provider>
-        </DeviceSwitcherContext.Provider>
-      </SettingsProvider>
-    </ConnectorProvider>
+                  )}
+                  <BrightnessOverlay 
+                    isVisible={showBrightnessOverlay}
+                    brightness={brightness}
+                    onBrightnessChange={setBrightness}
+                    onDismiss={() => setShowBrightnessOverlay(false)}
+                  />
+                </div>
+              </ConnectorContext.Provider>
+            </NetworkContext.Provider>
+          </DeviceSwitcherContext.Provider>
+        </SettingsProvider>
+      </ConnectorProvider>
+    </Router>
   );
 }
 
