@@ -251,6 +251,14 @@ function App() {
   const [showBrightnessOverlay, setShowBrightnessOverlay] = useState(false);
 
   useEffect(() => {
+    fetch('http://localhost:5000/device/resetcounter', {
+      method: 'POST',
+    }).catch(error => {
+      console.error('Error resetting boot counter:', error);
+    });
+  }, []);
+
+  useEffect(() => {
     const handleBrightnessKeyDown = (e) => {
       if (e.key.toLowerCase() === 'm' && !showBrightnessOverlay) {
         e.preventDefault();
