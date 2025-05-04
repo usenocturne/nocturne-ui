@@ -141,12 +141,12 @@ const BrightnessOverlay = memo(({ isVisible, brightness, onBrightnessChange, onD
 
   if (!isVisible && !brightness) return null;
 
-  const brightnessPercent = ((brightness - 5) / (250 - 5)) * 100;
+  const brightnessPercent = 100 - (((brightness - 5) / (250 - 5)) * 100);
   const BrightnessIcon = brightness >= 170 
-    ? BrightnessHighIcon 
+    ? BrightnessLowIcon
     : brightness >= 80 
       ? BrightnessMidIcon 
-      : BrightnessLowIcon;
+      : BrightnessHighIcon;
 
   return (
     <>
