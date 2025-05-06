@@ -249,6 +249,8 @@ function App() {
   const [isTetheringRequired, setIsTetheringRequired] = useState(false);
   const [brightness, setBrightness] = useState(160);
   const [showBrightnessOverlay, setShowBrightnessOverlay] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [hasSeenTutorial, setHasSeenTutorial] = useState(() => localStorage.getItem("hasSeenTutorial") === "true");
 
   useEffect(() => {
     fetch('http://localhost:5000/device/resetcounter', {
@@ -509,6 +511,7 @@ function App() {
   const handleTutorialComplete = () => {
     setShowTutorial(false);
     localStorage.setItem("hasSeenTutorial", "true");
+    setHasSeenTutorial(true);
   };
 
   const handleOpenContent = (id, type) => {
@@ -546,6 +549,18 @@ function App() {
   };
 
   const isFlashing = isUpdating && updateStatus.stage === "flash";
+
+  useEffect(() => {
+    if (isAuthenticated && !authIsLoading && !isLoading.recentAlbums) {
+      setIsInitialLoad(false);
+    }
+  }, [isAuthenticated, authIsLoading, isLoading.recentAlbums]);
+
+  useEffect(() => {
+    if (isAuthenticated && hasSeenTutorial && (!isConnected || showNoNetwork)) {
+      setShowBanner(true);
+    }
+  }, [isInitialLoad, isConnected, showNoNetwork]);
 
   let content;
   if (authIsLoading) {
@@ -628,23 +643,18 @@ function App() {
                             onAccept={acceptPairing}
                             onReject={denyPairing}
                           />
-                        ) : !isConnected && lastConnectedDevice ? (
+                        ) : (!isAuthenticated || (!hasSeenTutorial && isInitialLoad)) && (!isConnected || showNoNetwork) && !showTutorial ? (
                           <NetworkScreen
-                            deviceName={lastConnectedDevice.name}
+                            deviceName={lastConnectedDevice?.name}
                             isConnectionLost={true}
                             isTetheringRequired={isTetheringRequired}
                             onRetryDismiss={stopRetrying}
-                          />
-                        ) : showNoNetwork ? (
-                          <NetworkScreen
-                            isConnectionLost={true}
-                            isTetheringRequired={isTetheringRequired}
                           />
                         ) : null}
                       </>
                     )}
                     <NetworkBanner
-                      visible={showNetworkBanner}
+                      visible={showNetworkBanner && !showTutorial}
                       onClose={dismissNetworkBanner}
                     />
                     <SystemUpdateModal
