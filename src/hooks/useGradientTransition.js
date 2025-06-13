@@ -468,7 +468,8 @@ export function useGradientTransition(activeSection) {
           section === "playlist" ||
           section === "artist" ||
           section === "mix" ||
-          section === "liked-songs"
+          section === "liked-songs" ||
+          section === "lock"
         ) {
           setTargetColor1(hexColors[0]);
           setTargetColor2(hexColors[1]);
