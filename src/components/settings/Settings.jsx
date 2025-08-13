@@ -6,7 +6,6 @@ import {
   ListboxOptions,
   ListboxOption,
 } from "@headlessui/react";
-import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogPanel,
@@ -30,6 +29,7 @@ import SoftwareUpdate from "./SoftwareUpdate";
 import WiFiNetworks from "./network/WiFiNetworks";
 import BluetoothDevices from "./network/BluetoothDevices";
 import { useSettings } from "../../contexts/SettingsContext";
+import { revokeApiToken } from "../../services/authService";
 
 const settingsStructure = {
   general: {
@@ -179,7 +179,7 @@ const settingsStructure = {
         id: "sign-out",
         title: "Sign Out",
         type: "action",
-        description: "Sign out of your Spotify account.",
+        description: "Sign out of your Nocturne account.",
         action: "signOut",
       },
     ],
@@ -568,14 +568,13 @@ export default function Settings({
   onOpenDonationModal,
   setActiveSection,
 }) {
-  const navigate = useNavigate();
   const [userProfile, setUserProfile] = useState(null);
   const [versionInfo, setVersionInfo] = useState("Loading versions...");
   const [activeParent, setActiveParent] = useState(null);
   const [activeSubItem, setActiveSubItem] = useState(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const shouldExitToRecents = useRef(false);
-  const isProcessingEscape = useRef(false);
+
   const scrollContainerRef = useRef(null);
   const { settings, updateSetting } = useSettings();
   const [manualTzContinent, setManualTzContinent] = useState("");
@@ -708,10 +707,13 @@ export default function Settings({
 
   const handleSignOut = async () => {
     try {
+      const apiToken = localStorage.getItem("nocturneApiToken");
+      if (apiToken) {
+        revokeApiToken(apiToken).finally(() => {});
+      }
       localStorage.removeItem("spotifyAccessToken");
-      localStorage.removeItem("spotifyRefreshToken");
       localStorage.removeItem("spotifyTokenExpiry");
-      localStorage.removeItem("spotifyAuthType");
+      localStorage.removeItem("nocturneApiToken");
       window.location.reload();
     } catch (error) {
       console.error("Error during sign out:", error);

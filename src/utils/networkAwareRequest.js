@@ -92,6 +92,27 @@ let cleanupRef = setupNetworkMonitoring();
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
+if (typeof window !== "undefined" && !window.__nocturneFetchPatched) {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const response = await originalFetch(...args);
+    try {
+      const requestUrl =
+        typeof args[0] === "string" ? args[0] : args[0]?.url || response.url;
+      if (
+        (response.status === 401 || response.status === 403) &&
+        requestUrl &&
+        (requestUrl.includes("api.spotify.com") ||
+          requestUrl.includes("spotify.com"))
+      ) {
+        window.dispatchEvent(new Event("spotifyUnauthorized"));
+      }
+    } catch (_) {}
+    return response;
+  };
+  window.__nocturneFetchPatched = true;
+}
+
 export function waitForNetwork(checkIntervalMs = 1000) {
   return new Promise((resolve) => {
     const bypass =
@@ -193,6 +214,16 @@ export async function networkAwareRequest(
     }
 
     const response = await requestInfo;
+
+    if (
+      (response.status === 401 || response.status === 403) &&
+      (response.url?.includes("api.spotify.com") ||
+        response.url?.includes("spotify.com"))
+    ) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("spotifyUnauthorized"));
+      }
+    }
 
     if (
       !response.ok &&

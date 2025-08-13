@@ -66,7 +66,6 @@ function useGlobalButtonMapping({
   const [activeButton, setActiveButton] = useState(null);
   const [isProcessingButtonPress, setIsProcessingButtonPress] = useState(false);
   const ignoreNextReleaseRef = useRef(false);
-  const shouldRenderRef = useRef(true);
 
   const handleButtonPress = useCallback(
     async (buttonNumber) => {
@@ -423,9 +422,6 @@ function App() {
     authIsLoading,
     currentPlayback,
     currentlyPlayingAlbum,
-    albumChangeEvent,
-    playerIsLoading,
-    playerError,
     refreshPlaybackState,
     playerControls,
     recentAlbums,
@@ -436,7 +432,6 @@ function App() {
     userShows,
     initialDataLoaded,
     isLoading,
-    errors: dataErrors,
     refreshData,
     refreshRecentlyPlayed,
   } = useSpotifyData(
@@ -525,13 +520,10 @@ function App() {
     acceptPairing,
     denyPairing,
     setDiscoverable,
-    disconnectDevice,
     enableNetworking,
-    stopRetrying,
   } = useBluetooth();
 
-  const { updateStatus, progress, isUpdating, isError, errorMessage } =
-    useSystemUpdate();
+  const { updateStatus, isUpdating } = useSystemUpdate();
 
   const [gradientState, updateGradientColors] = useGradientState(activeSection);
 
@@ -841,11 +833,11 @@ function App() {
 
   const handleAuthSuccess = () => {
     const storedAccessToken = localStorage.getItem("spotifyAccessToken");
-    const storedRefreshToken = localStorage.getItem("spotifyRefreshToken");
+    const storedApiToken = localStorage.getItem("nocturneApiToken");
     const storedExpiry = localStorage.getItem("spotifyTokenExpiry");
     const isTokenValid = storedExpiry && new Date(storedExpiry) > new Date();
 
-    if (storedAccessToken && storedRefreshToken && isTokenValid) {
+    if (storedAccessToken && storedApiToken && isTokenValid) {
       if (initialDataLoaded) {
         console.log("Refreshing data after auth success");
         refreshData();
@@ -907,17 +899,6 @@ function App() {
   const handleNavigateToNowPlaying = () => {
     setViewingContent(null);
     setActiveSection("nowPlaying");
-  };
-
-  const handleNavigateToArtist = (id, type) => {
-    setViewingContent({ id, type });
-    setActiveSection("artists");
-  };
-
-  const handleNetworkCancel = () => {
-    if (lastConnectedDevice) {
-      disconnectDevice(lastConnectedDevice.address);
-    }
   };
 
   const handleConnectionRestored = () => {

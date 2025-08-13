@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { refreshAccessToken as fetchSpotifyToken } from "../../services/authService";
 import { useGradientState } from "../../hooks/useGradientState";
 import { useAuth } from "../../hooks/useAuth";
 import { useNetwork } from "../../hooks/useNetwork";
@@ -11,9 +13,11 @@ const AuthScreen = ({ onAuthSuccess }) => {
   const [error, setError] = useState(null);
   const [authInitialized, setAuthInitialized] = useState(false);
   const [hasQrCode, setHasQrCode] = useState(false);
+  const [showSpotifyLinkScreen, setShowSpotifyLinkScreen] = useState(false);
   const authAttemptedRef = useRef(false);
   const authTimerRef = useRef(null);
   const previousNetworkStateRef = useRef(null);
+  const spotifyPollRef = useRef(null);
 
   const { authData, isLoading, initAuth, pollAuthStatus, isAuthenticated } =
     useAuth();
@@ -25,11 +29,25 @@ const AuthScreen = ({ onAuthSuccess }) => {
   }, [updateGradientColors]);
 
   useEffect(() => {
+    const openSpotifyLinkScreen = () => setShowSpotifyLinkScreen(true);
+    window.addEventListener("spotifyLinkRequired", openSpotifyLinkScreen);
+    if (
+      localStorage.getItem("nocturneApiToken") &&
+      !localStorage.getItem("spotifyAccessToken")
+    ) {
+      setShowSpotifyLinkScreen(true);
+    }
+    return () =>
+      window.removeEventListener("spotifyLinkRequired", openSpotifyLinkScreen);
+  }, []);
+
+  useEffect(() => {
     if (
       !authInitialized &&
       !isAuthenticated &&
       !authAttemptedRef.current &&
-      isNetworkConnected
+      isNetworkConnected &&
+      !showSpotifyLinkScreen
     ) {
       if (authTimerRef.current) {
         clearTimeout(authTimerRef.current);
@@ -39,15 +57,13 @@ const AuthScreen = ({ onAuthSuccess }) => {
         authAttemptedRef.current = true;
         try {
           const storedAccessToken = localStorage.getItem("spotifyAccessToken");
-          const storedRefreshToken = localStorage.getItem(
-            "spotifyRefreshToken",
-          );
+          const storedApiToken = localStorage.getItem("nocturneApiToken");
 
-          if (!storedAccessToken || !storedRefreshToken) {
+          if (!storedAccessToken || !storedApiToken) {
             const authResponse = await initAuth();
-            if (authResponse?.device_code) {
+            if (authResponse?.code) {
               setAuthInitialized(true);
-              pollAuthStatus(authResponse.device_code);
+              pollAuthStatus(authResponse.code);
             }
           }
         } catch (err) {
@@ -68,7 +84,49 @@ const AuthScreen = ({ onAuthSuccess }) => {
     isAuthenticated,
     authInitialized,
     isNetworkConnected,
+    showSpotifyLinkScreen,
   ]);
+
+  useEffect(() => {
+    if (!showSpotifyLinkScreen) {
+      if (spotifyPollRef.current) {
+        clearInterval(spotifyPollRef.current);
+        spotifyPollRef.current = null;
+      }
+      return;
+    }
+    const poll = async () => {
+      const apiToken = localStorage.getItem("nocturneApiToken");
+      if (!apiToken) return;
+      try {
+        const tokenResp = await fetchSpotifyToken(apiToken);
+        if (tokenResp && tokenResp.access_token) {
+          localStorage.setItem("spotifyAccessToken", tokenResp.access_token);
+          localStorage.setItem("spotifyAuthType", "nocturne");
+          const expiryDate = new Date();
+          const expiresIn = tokenResp.expires_in || 3600;
+          expiryDate.setSeconds(expiryDate.getSeconds() + expiresIn - 600);
+          localStorage.setItem("spotifyTokenExpiry", expiryDate.toISOString());
+          window.dispatchEvent(
+            new CustomEvent("accessTokenUpdated", {
+              detail: { accessToken: tokenResp.access_token },
+            }),
+          );
+          setShowSpotifyLinkScreen(false);
+        }
+      } catch {
+        // hi
+      }
+    };
+    poll();
+    spotifyPollRef.current = setInterval(poll, 5000);
+    return () => {
+      if (spotifyPollRef.current) {
+        clearInterval(spotifyPollRef.current);
+        spotifyPollRef.current = null;
+      }
+    };
+  }, [showSpotifyLinkScreen]);
 
   useEffect(() => {
     if (isAuthenticated && authInitialized) {
@@ -105,6 +163,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
 
   useEffect(() => {
     if (authInitialized && !hasQrCode && isNetworkConnected) {
+      if (showSpotifyLinkScreen) return;
       const retryTimer = setTimeout(() => {
         if (!hasQrCode && isNetworkConnected) {
           authAttemptedRef.current = false;
@@ -115,14 +174,15 @@ const AuthScreen = ({ onAuthSuccess }) => {
 
       return () => clearTimeout(retryTimer);
     }
-  }, [authInitialized, hasQrCode, isNetworkConnected]);
+  }, [authInitialized, hasQrCode, isNetworkConnected, showSpotifyLinkScreen]);
 
   const handleQRCodeRefresh = async () => {
     if (!isNetworkConnected || isAuthenticated) return;
+    if (showSpotifyLinkScreen) return;
 
     const storedAccessToken = localStorage.getItem("spotifyAccessToken");
-    const storedRefreshToken = localStorage.getItem("spotifyRefreshToken");
-    if (storedAccessToken && storedRefreshToken) return;
+    const storedApiToken = localStorage.getItem("nocturneApiToken");
+    if (storedAccessToken && storedApiToken) return;
 
     try {
       setError(null);
@@ -131,9 +191,9 @@ const AuthScreen = ({ onAuthSuccess }) => {
       setHasQrCode(false);
 
       const authResponse = await initAuth();
-      if (authResponse?.device_code) {
+      if (authResponse?.code) {
         setAuthInitialized(true);
-        pollAuthStatus(authResponse.device_code);
+        pollAuthStatus(authResponse.code);
       }
     } catch (err) {
       setError("Failed to refresh QR code");
@@ -166,6 +226,37 @@ const AuthScreen = ({ onAuthSuccess }) => {
         ? "Network connection required"
         : null;
 
+  if (showSpotifyLinkScreen) {
+    return (
+      <div className="h-screen flex items-center justify-center overflow-hidden fixed inset-0 rounded-2xl">
+        <GradientBackground gradientState={gradientState} />
+        <div className="relative z-10 w-full max-w-6xl px-6 grid grid-cols-2 gap-16 items-center">
+          <div className="flex flex-col items-start space-y-8 ml-12">
+            <NocturneIcon className="h-12 w-auto" />
+            <div className="space-y-4">
+              <h2 className="text-4xl text-white tracking-tight font-[580] w-[24rem]">
+                Connect your Spotify account.
+              </h2>
+              <p className="text-[28px] text-white/60 tracking-tight w-[22rem]">
+                Please link your Spotify account on the Nocturne dashboard.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-center">
+            <div className="bg-white p-1 rounded-xl drop-shadow-[0_8px_5px_rgba(0,0,0,0.25)]">
+              <QRCodeSVG
+                value="http://localhost:3000/dashboard"
+                size={250}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex items-center justify-center overflow-hidden fixed inset-0 rounded-2xl">
       <GradientBackground gradientState={gradientState} />
@@ -179,7 +270,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
               Scan the QR code with your phone's camera.
             </h2>
             <p className="text-[28px] text-white/60 tracking-tight w-[22rem]">
-              You'll be redirected to Spotify to authorize Nocturne.
+              Log in to your Nocturne account to link this device.
             </p>
           </div>
         </div>
