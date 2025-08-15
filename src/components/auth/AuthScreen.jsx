@@ -102,7 +102,6 @@ const AuthScreen = ({ onAuthSuccess }) => {
         const tokenResp = await fetchSpotifyToken(apiToken);
         if (tokenResp && tokenResp.access_token) {
           localStorage.setItem("spotifyAccessToken", tokenResp.access_token);
-          localStorage.setItem("spotifyAuthType", "nocturne");
           const expiryDate = new Date();
           const expiresIn = tokenResp.expires_in || 3600;
           expiryDate.setSeconds(expiryDate.getSeconds() + expiresIn - 600);
@@ -267,10 +266,18 @@ const AuthScreen = ({ onAuthSuccess }) => {
 
           <div className="space-y-4">
             <h2 className="text-4xl text-white tracking-tight font-[580] w-[24rem]">
-              Scan the QR code with your phone's camera.
+              Link this device to your Nocturne account.
             </h2>
             <p className="text-[28px] text-white/60 tracking-tight w-[22rem]">
-              Log in to your Nocturne account to link this device.
+              {authData?.code ? (
+                <span>
+                  Scan the QR code, or go to{" "}
+                  <span className="font-[580]">dash.usenocturne.com/link</span>{" "}
+                  and enter <span className="font-[580]">{authData?.code}</span>.
+                </span>
+              ) : (
+                "Loading..."
+              )}
             </p>
           </div>
         </div>

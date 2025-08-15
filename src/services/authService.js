@@ -4,9 +4,34 @@ const API_BASE = "http://localhost:3000";
 
 export async function oauthAuthorize() {
   try {
+    let deviceSuffix = null;
+
+    try {
+      const infoResponse = await networkAwareRequest(async () =>
+        fetch(`http://localhost:5000/info`),
+      );
+      if (infoResponse && infoResponse.ok) {
+        const infoData = await infoResponse.json().catch(() => null);
+        if (infoData && infoData.serial) {
+          const serialStr = String(infoData.serial);
+          const last4 = serialStr.slice(-4);
+          deviceSuffix = last4 && last4.length > 0 ? last4 : null;
+        }
+      }
+    } catch (e) {
+      void e;
+    }
+
+    const deviceName = deviceSuffix
+      ? `Nocturne (${deviceSuffix})`
+      : "Nocturne";
+
     const response = await networkAwareRequest(async () =>
       fetch(`${API_BASE}/api/link/init`, {
         method: "POST",
+        body: JSON.stringify({
+          device_name: deviceName,
+        }),
       }),
     );
 
