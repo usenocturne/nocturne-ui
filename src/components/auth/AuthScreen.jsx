@@ -136,8 +136,11 @@ const AuthScreen = ({ onAuthSuccess }) => {
   }, [isAuthenticated, authInitialized]);
 
   useEffect(() => {
-    if (authData?.verification_uri_complete) {
+    const code = typeof authData?.code === "string" ? authData.code.trim() : "";
+    if (code.length > 0) {
       setHasQrCode(true);
+    } else {
+      setHasQrCode(false);
     }
   }, [authData]);
 
@@ -286,7 +289,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
           <QRCodeDisplay
             verificationUri={
               hasQrCode && isNetworkConnected
-                ? authData?.verification_uri_complete
+                ? authData?.verification_uri_complete || null
                 : null
             }
             isLoading={isContentLoading || !isNetworkConnected}

@@ -325,6 +325,23 @@ export function useAuth() {
             }
           }
         } catch (error) {
+          if (error && typeof error.message === "string" && error.message === "device_code_expired") {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+            currentLinkCodeRef.current = null;
+
+            try {
+              const link = await oauthAuthorize();
+              if (link && link.code) {
+                setAuthData(link);
+                currentLinkCodeRef.current = link.code;
+                pollAuthStatus(link.code);
+              }
+            } catch (e) {
+              console.error("Re-initializing auth after code expiry failed:", e);
+            }
+            return;
+          }
           console.error("Auth polling error:", error);
         }
       };

@@ -41,11 +41,13 @@ export async function oauthAuthorize() {
 
     const data = await response.json();
     const code = data?.code;
+    const codeStr = typeof code === "string" ? code.trim() : "";
     return {
-      code,
-      verification_uri_complete: `${API_BASE}/link?code=${encodeURIComponent(
-        code || "",
-      )}`,
+      code: codeStr || null,
+      verification_uri_complete:
+        codeStr && codeStr.length > 0
+          ? `${API_BASE}/link?code=${encodeURIComponent(codeStr)}`
+          : null,
       interval: 5,
     };
   } catch (error) {
@@ -59,6 +61,10 @@ export async function checkAuthStatus(code) {
     const response = await networkAwareRequest(async () =>
       fetch(`${API_BASE}/api/link/poll?code=${encodeURIComponent(code)}`),
     );
+
+    if (response.status === 404) {
+      throw new Error("device_code_expired");
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

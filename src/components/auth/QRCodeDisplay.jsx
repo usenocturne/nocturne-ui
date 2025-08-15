@@ -37,6 +37,12 @@ const QRCodeDisplay = ({
     );
   }
 
+  if (!verificationUri || verificationUri.trim() === "") {
+    return (
+      <div className="animate-pulse bg-white/10 w-[260px] h-[260px] rounded-xl" />
+    );
+  }
+
   if (error) {
     return (
       <div className="w-[280px] h-[280px] rounded-xl bg-white/10 flex items-center justify-center p-6">
@@ -48,7 +54,7 @@ const QRCodeDisplay = ({
   return (
     <div className="bg-white p-1 rounded-xl drop-shadow-[0_8px_5px_rgba(0,0,0,0.25)]">
       <QRCodeSVG
-        value={verificationUri || ""}
+        value={verificationUri}
         size={250}
         level="H"
         includeMargin={true}
