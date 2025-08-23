@@ -307,9 +307,12 @@ function NotificationEffects({
   activeSection,
   handleReboot,
   isAuthenticated,
+  isError,
+  errorMessage,
 }) {
   const { addNotification, removeNotification } = useNotifications();
   const notificationShownRef = useRef(false);
+  const lastErrorMessageRef = useRef(null);
 
   useEffect(() => {
     if (
@@ -354,6 +357,21 @@ function NotificationEffects({
       logoutNotificationIdRef.current = null;
     }
   }, [isAuthenticated, removeNotification]);
+
+  useEffect(() => {
+    if (isError && errorMessage) {
+      if (lastErrorMessageRef.current !== errorMessage) {
+        lastErrorMessageRef.current = errorMessage;
+        addNotification({
+          icon: SettingsUpdateIcon,
+          title: "Update failed",
+          description: errorMessage,
+        });
+      }
+    } else if (!isError) {
+      lastErrorMessageRef.current = null;
+    }
+  }, [isError, errorMessage, addNotification]);
 
   return null;
 }
@@ -488,6 +506,11 @@ function App() {
 
     if (existing) return;
 
+    window.umamiBeforeSend = (type, payload) => {
+      if (!payload) return false;
+      return { ...payload, id: serial };
+    };
+
     const script = document.createElement("script");
     script.defer = true;
     script.src = "https://p.itsnebula.net/script.js";
@@ -495,13 +518,8 @@ function App() {
       "data-website-id",
       "3465cd10-6beb-4dd9-969c-f7f44704fd18",
     );
+    script.setAttribute("data-before-send", "umamiBeforeSend");
     script.id = "analytics";
-
-    script.onload = () => {
-      if (window.umami) {
-        window.umami.identify(serial);
-      }
-    };
 
     document.body.appendChild(script);
   }, [
@@ -1039,6 +1057,8 @@ function App() {
         activeSection={activeSection}
         handleReboot={handleReboot}
         isAuthenticated={isAuthenticated}
+          isError={isError}
+          errorMessage={errorMessage}
       />
       {isAuthenticated && !showConnectionLostScreen && !showTutorial && (
         <UpdateCheckNotification
