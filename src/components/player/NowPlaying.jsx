@@ -12,6 +12,9 @@ import { useLyrics } from "../../hooks/useLyrics";
 import { useGestureControls } from "../../hooks/useGestureControls";
 import { useElapsedTime } from "../../hooks/useElapsedTime";
 import { useButtonMapping } from "../../hooks/useButtonMapping";
+import { usePlayerClock } from "../../hooks/usePlayerClock";
+import { useCurrentTime } from "../../hooks/useCurrentTime";
+import { generateRandomString } from "../../utils/helpers";
 import ButtonMappingOverlay from "../common/overlays/ButtonMappingOverlay";
 import ProgressBar from "./ProgressBar";
 import ScrollingText from "../common/ScrollingText";
@@ -34,7 +37,6 @@ import {
   RepeatOneIcon,
   SpeedIcon,
 } from "../common/icons";
-import { generateRandomString } from "../../utils/helpers";
 
 export default function NowPlaying({
   accessToken,
@@ -67,13 +69,15 @@ export default function NowPlaying({
   const currentTrackIdRef = useRef(null);
   const prevVolumeRef = useRef(null);
   const manualVolumeChangeRef = useRef(false);
-
+  
   const isDJPlaylist =
-    currentPlayback?.context?.uri === "spotify:playlist:37i9dQZF1EYkqdzj48dyYq";
+  currentPlayback?.context?.uri === "spotify:playlist:37i9dQZF1EYkqdzj48dyYq";
   const isPodcast = currentPlayback?.item?.type === "episode";
   const contentContainerRef = useRef(null);
-
+  
   const { elapsedTimeEnabled } = useElapsedTime();
+  const { playerClockEnabled } = usePlayerClock();
+  const { currentTime } = useCurrentTime();
 
   const {
     playTrack,
@@ -692,6 +696,13 @@ export default function NowPlaying({
       className="flex flex-col gap-1 h-screen w-full z-10 fadeIn-animation"
       ref={containerRef}
     >
+      {playerClockEnabled && (
+        <div
+          className="fixed top-0 right-0 p-4 text-[26px] font-[580] text-white tracking-tight leading-none"
+        >
+          {currentTime}
+        </div>
+      )}
       <div ref={contentContainerRef}>
         <div className="md:w-1/3 flex flex-row items-center px-12 pt-10">
           <div

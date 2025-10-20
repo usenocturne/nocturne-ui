@@ -10,6 +10,7 @@ const SettingsContext = createContext();
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState({
     use24HourTime: getDefaultSettingValue("use24HourTime", false),
+    useTimeSuffix: getDefaultSettingValue("useTimeSuffix", false),
     trackNameScrollingEnabled: getDefaultSettingValue(
       "trackNameScrollingEnabled",
       true,
@@ -24,6 +25,7 @@ export function SettingsProvider({ children }) {
     ),
     lyricsMenuEnabled: getDefaultSettingValue("lyricsMenuEnabled", true),
     elapsedTimeEnabled: getDefaultSettingValue("elapsedTimeEnabled", false),
+    playerClockEnabled: getDefaultSettingValue("playerClockEnabled", false),
     remainingTimeEnabled: getDefaultSettingValue("remainingTimeEnabled", false),
     showStatusBar: getDefaultSettingValue("showStatusBar", true),
     startWithNowPlaying: getDefaultSettingValue("startWithNowPlaying", false),
@@ -59,6 +61,11 @@ export function SettingsProvider({ children }) {
       } else {
         updateLocalStorage({ [key]: false });
       }
+    } else if (key === "use24HourTime") {
+      updateLocalStorage({ 
+        [key]: value,
+        useTimeSuffix: false
+       });
     } else if (key === "showLyricsGestureEnabled") {
       if (value) {
         updateLocalStorage({
@@ -83,7 +90,7 @@ export function SettingsProvider({ children }) {
 
     setSettings(newSettings);
 
-    if (key === "use24HourTime") {
+    if (key === "use24HourTime" || key === "useTimeSuffix") {
       window.dispatchEvent(new Event("timeFormatChanged"));
     }
   };

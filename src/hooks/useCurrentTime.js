@@ -55,6 +55,13 @@ export function useCurrentTime() {
     }
   };
 
+  const getSuffix = (hours24) => {
+    if(!settings.use24HourTime && settings.useTimeSuffix){
+      return hours24 >= 12 ? ' PM' : ' AM';
+    }
+    return '';
+  }
+
   useEffect(() => {
     if (settings.autoTimezoneEnabled) {
       fetchTimezone();
@@ -87,6 +94,7 @@ export function useCurrentTime() {
           const [hours24, minutes] = timeString.split(":");
 
           let displayHours;
+          let suffix = getSuffix(hours24);
           if (settings.use24HourTime) {
             displayHours = hours24;
             setIsFourDigits(true);
@@ -96,7 +104,7 @@ export function useCurrentTime() {
             setIsFourDigits(parseInt(displayHours) >= 10);
           }
 
-          setCurrentTime(`${displayHours}:${minutes}`);
+          setCurrentTime(`${displayHours}:${minutes}${suffix}`);
           return;
         }
       } catch (error) {
@@ -119,12 +127,13 @@ export function useCurrentTime() {
           let parts = timeString.split(":");
           let hours = parts[0];
           let minutes = parts[1];
+          let suffix = getSuffix(now.getHours());
 
           if (!settings.use24HourTime) {
             minutes = minutes.split(" ")[0];
           }
 
-          setCurrentTime(`${hours}:${minutes}`);
+          setCurrentTime(`${hours}:${minutes}${suffix}`);
           setIsFourDigits(hours.length >= 2);
           return;
         } catch (error) {
@@ -133,6 +142,7 @@ export function useCurrentTime() {
       }
 
       let hours;
+      let suffix = getSuffix(now.getHours());
       if (settings.use24HourTime) {
         hours = now.getHours().toString().padStart(2, "0");
         setIsFourDigits(true);
@@ -142,7 +152,7 @@ export function useCurrentTime() {
       }
 
       const minutes = now.getMinutes().toString().padStart(2, "0");
-      const timeString = `${hours}:${minutes}`;
+      const timeString = `${hours}:${minutes}${suffix}`;
       setCurrentTime(timeString);
     };
 
@@ -159,7 +169,7 @@ export function useCurrentTime() {
       clearInterval(interval);
       window.removeEventListener("timeFormatChanged", handleTimeFormatChange);
     };
-  }, [settings.use24HourTime, timezone]);
+  }, [settings.use24HourTime, settings.useTimeSuffix, timezone]);
 
   return {
     currentTime,
