@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+PARTITION="/dev/data"
+MOUNT="/mnt"
+
+if ! grep -q "${PARTITION}" /proc/mounts; then
+  mkfs.ext4 ${PARTITION} -d /var -L data -F
+
+  mount -t ext4 -o rw ${PARTITION} ${MOUNT}
+
+  mkdir -p ${MOUNT}/cache
+  mkdir -p ${MOUNT}/local/etc
+  mkdir -p ${MOUNT}/local/root
+  touch ${MOUNT}/local/etc/resolv.conf
+
+  cp /etc/skel/.bashrc ${MOUNT}/local/root/.bashrc
+  cp /etc/skel/.bash_profile ${MOUNT}/local/root/.bash_profile
+
+  mkdir -p ${MOUNT}/local/etc/ssh
+  ssh-keygen -A -f ${MOUNT}/local
+  cp /etc/sshd_config ${MOUNT}/local/etc/ssh/sshd_config
+
+  fallocate -l 256M ${MOUNT}/swapfile
+  mkswap ${MOUNT}/swapfile
+  chmod 600 ${MOUNT}/swapfile
+
+  sync
+
+  umount ${MOUNT}
+
+  echo "${PARTITION} was reset successfully."
+else
+  echo "${PARTITION} is mounted, exiting..."
+  exit 1
+fi

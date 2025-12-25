@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Spotify API Test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+    button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #1db954; border: none; color: #fff; border-radius: 4px; }
+    button:hover { background: #1ed760; }
+    pre { background: #2a2a2a; padding: 15px; border-radius: 4px; overflow-x: auto; }
+    .error { color: #ff6b6b; }
+    .success { color: #1db954; }
+    .warning { color: #ffa500; }
+    input { padding: 8px; width: 400px; margin: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Spotify API Test</h1>
+
+  <div>
+    <h3>1. Get token from localStorage</h3>
+    <button onclick="getToken()">Load Token</button>
+    <pre id="token-output">Click to load token...</pre>
+  </div>
+
+  <div>
+    <h3>2. Or paste token manually</h3>
+    <input type="text" id="manual-token" placeholder="Paste access token here">
+    <button onclick="useManualToken()">Use This Token</button>
+  </div>
+
+  <div>
+    <h3>3. Test API Endpoints</h3>
+    <button onclick="testEndpoint('/v1/me')">Test /me</button>
+    <button onclick="testEndpoint('/v1/me/player')">Test /me/player</button>
+    <button onclick="testEndpoint('/v1/me/playlists?limit=1')">Test /me/playlists</button>
+    <button onclick="testEndpoint('/v1/me/albums?limit=1')">Test /me/albums</button>
+  </div>
+
+  <div>
+    <h3>Results</h3>
+    <pre id="output">Results will appear here...</pre>
+  </div>
+
+  <script>
+    let currentToken = null;
+
+    function log(message, type = 'info') {
+      const output = document.getElementById('output');
+      const timestamp = new Date().toISOString();
+      const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+      output.innerHTML = `<span class="${className}">[${timestamp}] ${message}</span>\n` + output.innerHTML;
+    }
+
+    function getToken() {
+      try {
+        // Try different storage keys
+        const keys = ['spotifyAuth', 'spotify_access_token', 'accessToken'];
+        let token = null;
+        let source = null;
+
+        for (const key of keys) {
+          const value = localStorage.getItem(key);
+          if (value) {
+            try {
+              const parsed = JSON.parse(value);
+              if (parsed.accessToken) {
+                token = parsed.accessToken;
+                source = `${key}.accessToken`;
+                break;
+              } else if (parsed.access_token) {
+                token = parsed.access_token;
+                source = `${key}.access_token`;
+                break;
+              }
+            } catch {
+              // Not JSON, might be the token directly
+              if (value.startsWith('BQ')) {
+                token = value;
+                source = key;
+                break;
+              }
+            }
+          }
+        }
+
+        if (token) {
+          currentToken = token;
+          document.getElementById('token-output').textContent =
+            `Found token from: ${source}\nToken: ${token.substring(0, 50)}...`;
+          log(`Token loaded from ${source}`, 'success');
+        } else {
+          document.getElementById('token-output').textContent = 'No token found in localStorage';
+          log('No token found. Try the main app first to authenticate.', 'error');
+        }
+      } catch (e) {
+        log(`Error loading token: ${e.message}`, 'error');
+      }
+    }
+
+    function useManualToken() {
+      const input = document.getElementById('manual-token');
+      if (input.value) {
+        currentToken = input.value.trim();
+        log('Using manually entered token', 'success');
+      }
+    }
+
+    async function testEndpoint(endpoint) {
+      if (!currentToken) {
+        log('No token! Load or enter a token first.', 'error');
+        return;
+      }
+
+      const url = `https://api.spotify.com${endpoint}`;
+      log(`Testing: ${url}`);
+
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${currentToken}`
+          }
+        });
+
+        const retryAfter = response.headers.get('Retry-After');
+
+        log(`Status: ${response.status} ${response.statusText}`,
+            response.ok ? 'success' : response.status === 429 ? 'warning' : 'error');
+
+        if (retryAfter) {
+          log(`Retry-After header: ${retryAfter} seconds`, 'warning');
+        }
+
+        if (response.status === 429) {
+          log('RATE LIMITED! Wait and try again.', 'error');
+          return;
+        }
+
+        if (response.status === 401) {
+          log('Token expired or invalid. Need to re-authenticate.', 'error');
+          return;
+        }
+
+        if (response.status === 204) {
+          log('No content (player might be inactive)', 'warning');
+          return;
+        }
+
+        if (response.ok) {
+          const data = await response.json();
+          log(`Response: ${JSON.stringify(data, null, 2).substring(0, 500)}...`, 'success');
+        }
+      } catch (e) {
+        log(`Network error: ${e.message}`, 'error');
+      }
+    }
+
+    // Auto-load token on page load
+    getToken();
+  </script>
+</body>
+</html>

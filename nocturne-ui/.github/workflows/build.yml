@@ -22,15 +22,13 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        working-directory: ./nocturne-ui
         run: bun install --frozen-lockfile
 
       - name: Build project
-        working-directory: ./nocturne-ui
         run: bun run build
 
       - name: Upload build files
         uses: actions/upload-artifact@v4
         with:
           name: nocturne-ui
-          path: ./nocturne-ui/dist
+          path: ./dist

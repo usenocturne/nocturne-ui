@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build nocturned
+        run: GOOS=linux GOARCH=arm64 GOARM=7 go build -ldflags "-s -w"
+
+      - name: Export SHA256 sum
+        run: sha256sum nocturned > nocturned.sha256
+
+      - name: Add to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{github.event.release.tag_name}} nocturned
+          gh release upload ${{github.event.release.tag_name}} nocturned.sha256

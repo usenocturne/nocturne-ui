@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+PARTITION="/dev/settings"
+MOUNT="/mnt"
+
+if ! grep -q "${PARTITION}" /proc/mounts; then
+  mkfs.ext4 ${PARTITION} -L settings -F
+
+  mount -t ext4 -o rw ${PARTITION} ${MOUNT}
+
+  chmod 755 -R ${MOUNT}
+
+  sync
+
+  umount ${MOUNT}
+
+  echo "${PARTITION} was reset successfully."
+else
+  echo "${PARTITION} is mounted, exiting..."
+  exit 1
+fi

@@ -1,0 +1,28 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    paths-ignore:
+      - '**/README.md'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build nocturned
+        run: GOOS=linux GOARCH=arm64 GOARM=7 go build -ldflags "-s -w"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nocturned
+          path: nocturned
+          compression-level: 9
+          if-no-files-found: error
