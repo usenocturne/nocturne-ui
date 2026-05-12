@@ -352,6 +352,12 @@ function NowPlaying({
 
     const albumId = hasCurrentItem ? currentPlayback?.item?.album?.id : null;
 
+    const albumName = hasCurrentItem
+      ? currentPlayback.item.type === "episode"
+        ? currentPlayback.item.show?.name || ""
+        : currentPlayback.item.album?.name || ""
+      : "";
+
     const albumImages = hasCurrentItem
       ? currentPlayback.item.type === "episode"
         ? currentPlayback.item.images ||
@@ -365,6 +371,7 @@ function NowPlaying({
     return {
       trackName,
       artistName,
+      albumName,
       albumImages,
       trackId,
       firstArtistId,
@@ -375,6 +382,7 @@ function NowPlaying({
   const {
     trackName,
     artistName,
+    albumName,
     albumImages,
     trackId,
     firstArtistId,
@@ -939,6 +947,18 @@ function NowPlaying({
               >
                 {artistName}
               </h4>
+              {albumName && (
+                <h5
+                  className={`text-[24px] font-[480] text-white/40 truncate tracking-tight max-w-[380px] ${albumId && !isLocalMedia && !isPhoneMedia ? "cursor-pointer" : ""}`}
+                  onClick={() => {
+                    if (albumId && !isLocalMedia && !isPhoneMedia) {
+                      onNavigateToAlbum(albumId, "album");
+                    }
+                  }}
+                >
+                  {albumName}
+                </h5>
+              )}
             </div>
           ) : (
             <div className="flex-1 flex flex-col h-[280px]">
