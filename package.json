@@ -32,7 +32,6 @@
     "@tailwindcss/postcss": "^4.2.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-legacy": "^6.1.1",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^5.2.0",

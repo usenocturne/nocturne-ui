@@ -12,7 +12,6 @@ Vite + React 19 SPA served by Chromium kiosk on the Spotify Car Thing (800×480,
 ## STACK
 
 - **Vite 6** + `@vitejs/plugin-react-swc` (SWC, not Babel)
-- **`@vitejs/plugin-legacy`** — builds for Chrome 69 target (Car Thing Chromium is old)
 - React 19.2 + react-router-dom 7 + MobX 6 (mockingbird only)
 - Tailwind CSS 3 + SCSS modules (mockingbird only) + `@headlessui/react`
 - `bun` as package manager (`bun.lockb`, NOT `package-lock.json`)
@@ -22,8 +21,8 @@ Vite + React 19 SPA served by Chromium kiosk on the Spotify Car Thing (800×480,
 ```
 nocturne-ui/
 ├── index.html            # Single root div, loads src/main.jsx
-├── vite.config.js        # Legacy plugin + dev-mode chrome69 transform shim
-├── postcss.config.js     # Custom postcss-inset-fix plugin (chrome69 lacks `inset`)
+├── vite.config.js        # Minimal Vite config — just the React SWC plugin
+├── postcss.config.js     # Tailwind + autoprefixer
 ├── tailwind.config.js    # 12-language font-family stack (Inter + Noto variants), resolved from system-installed fonts
 ├── eslint.config.js      # Flat config, JS only, no TS
 ├── .prettierrc           # EMPTY file — defaults only
@@ -96,7 +95,7 @@ Overlays render outside the switch: `PairingScreen`/`MockingbirdPairingOverlay`,
 ## ANTI-PATTERNS (THIS PROJECT)
 
 - **Don't add `<Route>` declarations** — the Router is a shell for `useNavigate` only (see ROUTING above). App routing is a state machine in `App.jsx`.
-- **Don't target modern Chrome features.** Build must work on Chrome 69 (the kiosk browser). Optional-chaining/nullish-coalesce are fine (legacy plugin transpiles), but avoid top-level-await, private class fields (`#foo`), dynamic import in hot paths, and CSS `inset:` (PostCSS plugin fixes most usages — do not rely on it for new code; write `top/right/bottom/left`).
+- **Target is the kiosk's latest Chrome.** Modern JS/CSS is fine — no legacy plugin, no polyfills, no inset shorthand fix. Don't reintroduce Chrome 69 workarounds (manual `globalThis`/`Promise.allSettled`/`crypto.randomUUID` fallbacks, `top/right/bottom/left` instead of `inset:`, `@vitejs/plugin-legacy`).
 - **Don't import mockingbird code from main Nocturne UI** (except `UIShell.jsx` and the already-lazy `BTPairing` overlay in `App.jsx`). The skin is isolated and uses MobX — importing leaks into the Nocturne bundle.
 - **Don't call Spotify Web API directly.** All Spotify data flows through `useSpotifyData`/`useSpotifyWebSocket` → daemon WebSocket. OAuth is handled daemon-side.
 - **Don't add a TypeScript file** without team discussion. The project is all-JS by design; `@types/react*` is pinned only for editor hints.
@@ -122,4 +121,4 @@ bun run lint-check    # Prettier --check (CI)
 - **`public/fonts/` ships 18 woff2 files (~2MB)** — NOT loaded by the app. The kiosk Linux system has these fonts installed system-wide (via `nocturne-image`), and the browser resolves `Inter` / `Noto …` / `spotify-circular` by family name. The `public/` copies exist so developers can install the exact same fonts locally to preview the UI. Don't trim without confirming.
 - **`@tailwindcss/postcss` v4 is a devDep but the runtime is Tailwind 3.** The v4 package is vestigial/unused — don't migrate to v4 without a coordinated plan (mockingbird SCSS modules + Headless UI will need adjustments).
 - **`react-transition-group@4.4.5` is pinned** for React 19 compat via `mockingbird/ui/components/CSSTransitionCompat.jsx`. Don't upgrade.
-- **Legacy dev shim (`legacyDevTarget` in `vite.config.js`)** polyfills `Promise.allSettled`, `Object.fromEntries`, `String.prototype.replaceAll`, `performance.measure/mark` and retransforms every JS/TS asset to chrome69 at dev time. Production uses `@vitejs/plugin-legacy`.
+- **Build targets modern Chrome.** Vite defaults apply — no `@vitejs/plugin-legacy`, no dev-time esbuild downgrade, no manual polyfills. PostCSS is just Tailwind + autoprefixer.
