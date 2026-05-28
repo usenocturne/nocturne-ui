@@ -1121,7 +1121,7 @@ function NowPlaying({
 
   return (
     <div
-      className="flex flex-col gap-1 h-screen w-full z-10 fadeIn-animation"
+      className="flex flex-col h-screen w-full z-10 fadeIn-animation"
       ref={containerRef}
     >
       <div ref={contentContainerRef}>
