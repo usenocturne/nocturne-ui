@@ -560,6 +560,12 @@ export function useSpotifyPlayerState(immediateLoad = false) {
 
           const isEpisode =
             playerState.track?.uri?.startsWith("spotify:episode:");
+          const fallbackArtistName =
+            playerState.track?.metadata?.artist_name ||
+            playerState.track?.metadata?.album_artist_name ||
+            playerState.track?.metadata?.artist ||
+            "";
+          const fallbackArtistUri = playerState.track?.metadata?.artist_uri;
 
           const transformedState = {
             is_playing:
@@ -676,7 +682,16 @@ export function useSpotifyPlayerState(immediateLoad = false) {
                                 type: artist.type || "artist",
                               }),
                             )
-                          : [],
+                          : fallbackArtistName
+                            ? [
+                                {
+                                  id: fallbackArtistUri?.split(":")[2],
+                                  uri: fallbackArtistUri,
+                                  name: fallbackArtistName,
+                                  type: "artist",
+                                },
+                              ]
+                            : [],
                     duration_ms: parseInt(playerState.duration) || 0,
                     is_local: false,
                   }

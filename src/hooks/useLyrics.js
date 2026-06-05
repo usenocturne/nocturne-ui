@@ -2,6 +2,19 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useSpotifyWebSocket } from "./useSpotifyWebSocket";
 import { useProgressValue } from "./usePlaybackProgress";
 
+const normalizeLyricsKeyPart = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const getLyricsTrackKey = (item) => {
+  if (!item) return "";
+  if (typeof item.uri === "string" && item.uri.trim()) return item.uri.trim();
+
+  return [item.id, item.name, item.artists?.[0]?.name]
+    .map(normalizeLyricsKeyPart)
+    .filter(Boolean)
+    .join("|");
+};
+
 export function useLyrics(currentPlayback) {
   const { progressMs } = useProgressValue();
   const [showLyrics, setShowLyrics] = useState(false);
@@ -12,7 +25,7 @@ export function useLyrics(currentPlayback) {
   const [autoScrollSuspended, setAutoScrollSuspended] = useState(false);
   const [resumeOnNextLyric, setResumeOnNextLyric] = useState(false);
   const lyricsContainerRef = useRef(null);
-  const trackIdRef = useRef(null);
+  const lyricsTrackKeyRef = useRef(null);
   const autoScrollTimeoutRef = useRef(null);
 
   const { isSpotifyReady, sendSpotifyCommand } = useSpotifyWebSocket();
@@ -25,8 +38,9 @@ export function useLyrics(currentPlayback) {
   }, [lyrics]);
 
   const fetchLyrics = useCallback(
-    async (trackId, trackName, artistName) => {
+    async (trackId, trackName, artistName, trackKey) => {
       if (!isSpotifyReady || !trackId) return;
+      const requestKey = trackKey || trackId;
 
       try {
         setIsLoading(true);
@@ -38,6 +52,8 @@ export function useLyrics(currentPlayback) {
           artist_name: artistName,
         });
 
+        if (lyricsTrackKeyRef.current !== requestKey) return;
+
         if (result && result.lyrics && result.lyrics.lines) {
           setLyrics(result.lyrics.lines);
         } else {
@@ -45,11 +61,14 @@ export function useLyrics(currentPlayback) {
           setLyrics([]);
         }
       } catch (err) {
+        if (lyricsTrackKeyRef.current !== requestKey) return;
         console.error("Error fetching lyrics:", err);
         setError(err.message || "Failed to fetch lyrics");
         setLyrics([]);
       } finally {
-        setIsLoading(false);
+        if (lyricsTrackKeyRef.current === requestKey) {
+          setIsLoading(false);
+        }
       }
     },
     [isSpotifyReady, sendSpotifyCommand],
@@ -60,10 +79,16 @@ export function useLyrics(currentPlayback) {
     setShowLyrics(newShowLyrics);
 
     if (newShowLyrics && currentPlayback?.item?.id) {
-      trackIdRef.current = currentPlayback.item.id;
+      const trackKey = getLyricsTrackKey(currentPlayback.item);
+      lyricsTrackKeyRef.current = trackKey;
       const trackName = currentPlayback.item.name;
       const artistName = currentPlayback.item.artists?.[0]?.name || "";
-      await fetchLyrics(currentPlayback.item.id, trackName, artistName);
+      await fetchLyrics(
+        currentPlayback.item.id,
+        trackName,
+        artistName,
+        trackKey,
+      );
     }
   }, [showLyrics, currentPlayback?.item, fetchLyrics]);
 
@@ -76,12 +101,13 @@ export function useLyrics(currentPlayback) {
     if (
       showLyrics &&
       currentPlayback?.item?.id &&
-      currentPlayback.item.id !== trackIdRef.current
+      getLyricsTrackKey(currentPlayback.item) !== lyricsTrackKeyRef.current
     ) {
-      trackIdRef.current = currentPlayback.item.id;
+      const trackKey = getLyricsTrackKey(currentPlayback.item);
+      lyricsTrackKeyRef.current = trackKey;
       const trackName = currentPlayback.item.name;
       const artistName = currentPlayback.item.artists?.[0]?.name || "";
-      fetchLyrics(currentPlayback.item.id, trackName, artistName);
+      fetchLyrics(currentPlayback.item.id, trackName, artistName, trackKey);
     }
   }, [showLyrics, currentPlayback?.item, fetchLyrics]);
 
