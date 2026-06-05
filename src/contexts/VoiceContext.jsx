@@ -522,7 +522,8 @@ export function VoiceProvider({ children, suppressed = false }) {
       cancel: () => {
         rejectCurrentSession();
         pendingSessionRejectionRef.current = true;
-        sendVoiceCommand("audio.record.stop", {});
+        sendVoiceCommand("audio.record.stop", {}).catch(() => {});
+        sendVoiceCommand("voice.cancel", {}).catch(() => {});
         clearCaptureTimeout();
         clearAiTimeout();
         clearSpeakingTimeout();
