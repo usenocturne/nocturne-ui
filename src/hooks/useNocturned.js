@@ -73,6 +73,12 @@ let btReconnectSettleStartedAt = 0;
 let btReconnectWatchdogTimer = null;
 const btConnectionTypeByDevice = new Map();
 let lastAppReadyAt = 0;
+const btActiveSessions = new Set();
+let lastBtSessionClosedAt = 0;
+
+const hasLiveBtSessionEvidence = (address) =>
+  btActiveSessions.has(address) ||
+  (lastAppReadyAt > 0 && lastAppReadyAt >= lastBtSessionClosedAt);
 
 const normalizeDevicesForState = (devices = []) =>
   (Array.isArray(devices) ? devices : []).map((device) => ({
@@ -895,7 +901,7 @@ const clearBtReconnectWatchdog = () => {
 
 const startBtReconnectWatchdog = () => {
   if (btReconnectWatchdogTimer) return;
-  btReconnectWatchdogTimer = setInterval(async () => {
+  btReconnectWatchdogTimer = setInterval(() => {
     const lastDeviceAddress = localStorage.getItem(
       "lastConnectedBluetoothDevice",
     );
@@ -909,18 +915,13 @@ const startBtReconnectWatchdog = () => {
     ) {
       return;
     }
-    try {
-      const resp = await requestDevicesListDeduped(true);
-      const devices = (resp && resp.payload) || [];
-      const connected = devices.some(
-        (device) => device.address === lastDeviceAddress && device.connected,
-      );
-      if (connected) return;
-      btReconnectCancelled = false;
-      retryIsCancelled = true;
-      attemptBtReconnect();
-    } catch {
+
+    if (hasLiveBtSessionEvidence(lastDeviceAddress)) {
+      return;
     }
+    btReconnectCancelled = false;
+    retryIsCancelled = true;
+    attemptBtReconnect();
   }, BT_RECONNECT_WATCHDOG_MS);
 };
 
@@ -964,7 +965,8 @@ export async function attemptBtReconnect() {
       const isAlreadyConnected = devices.some(
         (device) => device.address === lastDeviceAddress && device.connected,
       );
-      if (isAlreadyConnected) {
+
+      if (isAlreadyConnected && hasLiveBtSessionEvidence(lastDeviceAddress)) {
         const connType = btConnectionTypeByDevice.get(lastDeviceAddress);
         if (connType === "iap2") {
           completeBtReconnectSuccess();
@@ -1001,6 +1003,7 @@ export async function attemptBtReconnect() {
     if (response && response.ok) {
       const data = await readConnectResponseJson(response);
       if (isConnectResponseConnected(data)) {
+        btActiveSessions.add(lastDeviceAddress);
         const connType = btConnectionTypeByDevice.get(lastDeviceAddress);
         if (connType === "iap2") {
           completeBtReconnectSuccess();
@@ -1032,18 +1035,33 @@ export async function attemptBtReconnect() {
 
 const handleBluetoothSingletonMessage = (data) => {
   if (data?.type !== "event") return;
+
+  if (data.topic === "bluetooth.device") {
+    const ev = data.data || {};
+    if (ev.event === "disconnected" && ev.device) {
+      btActiveSessions.delete(ev.device);
+      if (ev.device === localStorage.getItem("lastConnectedBluetoothDevice")) {
+        lastBtSessionClosedAt = Date.now();
+      }
+    }
+    return;
+  }
+
   if (data.topic !== "bluetooth.connection") return;
   const ev = data.data || {};
 
   if (ev.event === "connection_established") {
     const connType = ev.connection_type || "unknown";
     btConnectionTypeByDevice.set(ev.device, connType);
+    btActiveSessions.add(ev.device);
     if (connType === "iap2") {
       completeBtReconnectSuccess();
     } else {
       beginBtReconnectSettle(ev.device);
     }
   } else if (ev.event === "connection_closed") {
+    btActiveSessions.delete(ev.device);
+    lastBtSessionClosedAt = Date.now();
     const lastDeviceAddress = localStorage.getItem(
       "lastConnectedBluetoothDevice",
     );
@@ -1063,6 +1081,7 @@ const handleBluetoothSingletonMessage = (data) => {
     btReconnectCancelled = false;
     reconnectionExhausted = false;
     emitBtReconnectState();
+    window.dispatchEvent(new Event("networkBannerShow"));
     btReconnectTimer = setTimeout(() => {
       btReconnectTimer = null;
       attemptBtReconnect();
@@ -1071,6 +1090,8 @@ const handleBluetoothSingletonMessage = (data) => {
 };
 
 const handleBluetoothSingletonOpen = () => {
+  btActiveSessions.clear();
+  lastBtSessionClosedAt = Date.now();
   startBtReconnectWatchdog();
   const lastDeviceAddress = localStorage.getItem(
     "lastConnectedBluetoothDevice",

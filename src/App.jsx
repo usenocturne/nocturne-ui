@@ -425,7 +425,6 @@ function App() {
     disconnectDevice,
     enableNetworking,
     stopRetrying,
-    reconnectAttempt,
   } = useBluetooth();
 
   const { addMessageListener, removeMessageListener, wsConnected } =
@@ -435,6 +434,17 @@ function App() {
     (Array.isArray(devices) && devices.length > 0) ||
     (Array.isArray(connectedDevices) && connectedDevices.length > 0) ||
     Boolean(lastConnectedDevice);
+
+  const [hadBtConnection, setHadBtConnection] = useState(false);
+  useEffect(() => {
+    if (
+      lastConnectedDevice ||
+      (Array.isArray(connectedDevices) &&
+        connectedDevices.some((device) => device?.connected))
+    ) {
+      setHadBtConnection(true);
+    }
+  }, [lastConnectedDevice, connectedDevices]);
 
   const processSpotifyAuthMessage = useCallback(
     (message) => {
@@ -1222,12 +1232,17 @@ function App() {
     Array.isArray(connectedDevices) &&
     connectedDevices.some((device) => device?.connected);
 
+  const awaitingBtReconnect =
+    hadBtConnection &&
+    Boolean(localStorage.getItem("lastConnectedBluetoothDevice"));
+
   const showConnectionLostScreen =
     !showTutorial &&
     !pairingRequest &&
     ((!lastConnectedDevice &&
       !hasActiveBluetoothConnection &&
-      hasFetchedInitialDevices) ||
+      hasFetchedInitialDevices &&
+      !awaitingBtReconnect) ||
       showExhaustedReconnectScreen);
   // const showConnectionLostScreen = false;
 
@@ -1248,8 +1263,7 @@ function App() {
     !showConnectionLostScreen &&
     !showTutorial &&
     !showAuthScreen &&
-    !showSplash &&
-    reconnectAttempt === 0;
+    !showSplash;
 
   const isSystemScreen =
     showSplash || showAuthScreen || showConnectionLostScreen || showTutorial;
