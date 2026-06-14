@@ -75,6 +75,9 @@ const btConnectionTypeByDevice = new Map();
 let lastAppReadyAt = 0;
 const btActiveSessions = new Set();
 let lastBtSessionClosedAt = 0;
+let lastBtLinkDownAt = 0;
+let appLaunchRequested = false;
+const APP_RELAUNCH_NEW_DRIVE_GAP_MS = 600000;
 
 const hasLiveBtSessionEvidence = (address) =>
   btActiveSessions.has(address) ||
@@ -490,7 +493,8 @@ const setupGlobalWebSocket = async () => {
         if (data && data.type === "event" && data.topic === "app.ready") {
           const pendingPlatform = data.data?.platform || null;
 
-          if (pendingPlatform === "ios") {
+          if (pendingPlatform === "ios" && !appLaunchRequested) {
+            appLaunchRequested = true;
             sendWsRequest("device.launchApp", {
               bundleId: "com.usenocturne.nocturne",
             }).catch((err) => {
@@ -1042,6 +1046,7 @@ const handleBluetoothSingletonMessage = (data) => {
       btActiveSessions.delete(ev.device);
       if (ev.device === localStorage.getItem("lastConnectedBluetoothDevice")) {
         lastBtSessionClosedAt = Date.now();
+        lastBtLinkDownAt = Date.now();
       }
     }
     return;
@@ -1053,6 +1058,12 @@ const handleBluetoothSingletonMessage = (data) => {
   if (ev.event === "connection_established") {
     const connType = ev.connection_type || "unknown";
     btConnectionTypeByDevice.set(ev.device, connType);
+    if (
+      lastBtLinkDownAt > 0 &&
+      Date.now() - lastBtLinkDownAt >= APP_RELAUNCH_NEW_DRIVE_GAP_MS
+    ) {
+      appLaunchRequested = false;
+    }
     btActiveSessions.add(ev.device);
     if (connType === "iap2") {
       completeBtReconnectSuccess();
@@ -1068,6 +1079,7 @@ const handleBluetoothSingletonMessage = (data) => {
     if (!lastDeviceAddress || ev.device !== lastDeviceAddress) {
       return;
     }
+    lastBtLinkDownAt = Date.now();
     if (manualDisconnectInProgress) {
       manualDisconnectInProgress = false;
       return;
