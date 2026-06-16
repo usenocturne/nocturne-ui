@@ -63,7 +63,10 @@ const NotificationBridge = () => {
         if (!isAuthenticated) return;
         if (autoDismissInternalIdsRef.current.size === 0) return;
 
-        for (const [externalId, internalId] of autoDismissInternalIdsRef.current) {
+        for (const [
+          externalId,
+          internalId,
+        ] of autoDismissInternalIdsRef.current) {
           removeNotification(internalId);
           seenIdsRef.current.delete(externalId);
         }
@@ -75,7 +78,12 @@ const NotificationBridge = () => {
     return () => {
       if (listenerId) removeMessageListener(listenerId);
     };
-  }, [addMessageListener, removeMessageListener, addNotification, removeNotification]);
+  }, [
+    addMessageListener,
+    removeMessageListener,
+    addNotification,
+    removeNotification,
+  ]);
 
   return null;
 };

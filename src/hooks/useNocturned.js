@@ -71,6 +71,9 @@ let btReconnectSettleTimer = null;
 let btReconnectSettleDevice = null;
 let btReconnectSettleStartedAt = 0;
 let btReconnectWatchdogTimer = null;
+let btReconnectCycleSignature = null;
+let btReconnectCycle = [];
+let btReconnectCycleIndex = 0;
 const btConnectionTypeByDevice = new Map();
 let lastAppReadyAt = 0;
 const btActiveSessions = new Set();
@@ -82,6 +85,77 @@ const APP_RELAUNCH_NEW_DRIVE_GAP_MS = 600000;
 const hasLiveBtSessionEvidence = (address) =>
   btActiveSessions.has(address) ||
   (lastAppReadyAt > 0 && lastAppReadyAt >= lastBtSessionClosedAt);
+
+const getDevicesFromListResponse = (resp) =>
+  (resp && resp.payload) || (resp && resp.result && resp.result.payload) || [];
+
+const getReconnectableDeviceAddresses = (devices = []) => {
+  const seen = new Set();
+  const addresses = [];
+
+  (Array.isArray(devices) ? devices : []).forEach((device) => {
+    const address = device?.address;
+    if (!address || address === "unknown" || seen.has(address)) {
+      return;
+    }
+    seen.add(address);
+    addresses.push(address);
+  });
+
+  return addresses;
+};
+
+const buildBtReconnectCycle = (devices, lastDeviceAddress) => {
+  const addresses = getReconnectableDeviceAddresses(devices);
+  const signatureAddresses = [...addresses].sort();
+  const lastDeviceIsReconnectable =
+    lastDeviceAddress && addresses.includes(lastDeviceAddress);
+  const cycle = lastDeviceIsReconnectable
+    ? [
+        lastDeviceAddress,
+        lastDeviceAddress,
+        ...addresses.filter((address) => address !== lastDeviceAddress),
+      ]
+    : addresses;
+
+  return {
+    cycle,
+    signature: `${lastDeviceAddress || ""}|${signatureAddresses.join("|")}`,
+  };
+};
+
+const resetBtReconnectCycle = () => {
+  btReconnectCycleSignature = null;
+  btReconnectCycle = [];
+  btReconnectCycleIndex = 0;
+};
+
+const getNextBtReconnectAddress = (devices, lastDeviceAddress) => {
+  const { cycle, signature } = buildBtReconnectCycle(
+    devices,
+    lastDeviceAddress,
+  );
+
+  if (btReconnectCycleSignature !== signature) {
+    btReconnectCycleSignature = signature;
+    btReconnectCycle = cycle;
+    btReconnectCycleIndex = 0;
+  } else if (btReconnectCycle.length === 0) {
+    btReconnectCycle = cycle;
+  }
+
+  if (btReconnectCycleIndex >= btReconnectCycle.length) {
+    btReconnectCycleIndex = 0;
+  }
+
+  if (btReconnectCycle.length === 0) {
+    return null;
+  }
+
+  const address = btReconnectCycle[btReconnectCycleIndex];
+  btReconnectCycleIndex = (btReconnectCycleIndex + 1) % btReconnectCycle.length;
+  return address;
+};
 
 const normalizeDevicesForState = (devices = []) =>
   (Array.isArray(devices) ? devices : []).map((device) => ({
@@ -291,6 +365,7 @@ export const cleanupGlobalWebSocket = () => {
   cleanupWsReconnection();
   clearBtReconnectWatchdog();
   clearBtReconnectSettle();
+  resetBtReconnectCycle();
   if (globalWsRef) {
     globalWsRef.close(1000);
     globalWsRef = null;
@@ -793,6 +868,7 @@ const clearBtReconnectTimer = () => {
 export const stopBtReconnect = () => {
   btReconnectCancelled = true;
   clearBtReconnectTimer();
+  resetBtReconnectCycle();
   btReconnectInProgress = false;
   btReconnectAttempts = 0;
   reconnectionExhausted = false;
@@ -832,6 +908,7 @@ const clearBtReconnectSettle = () => {
 const completeBtReconnectSuccess = () => {
   clearBtReconnectTimer();
   clearBtReconnectSettle();
+  resetBtReconnectCycle();
   btReconnectAttempts = 0;
   btReconnectInProgress = false;
   btReconnectCancelled = true;
@@ -862,7 +939,7 @@ const verifyBtReconnectSettled = async (address) => {
   }
   try {
     const resp = await requestDevicesListDeduped(true);
-    const devices = (resp && resp.payload) || [];
+    const devices = getDevicesFromListResponse(resp);
     if (btReconnectSettleDevice !== address) return;
     const stillConnected = devices.some(
       (device) => device.address === address && device.connected,
@@ -946,15 +1023,6 @@ export async function attemptBtReconnect() {
   const lastDeviceAddress = localStorage.getItem(
     "lastConnectedBluetoothDevice",
   );
-  if (!lastDeviceAddress) {
-    clearBtReconnectTimer();
-    btReconnectAttempts = 0;
-    btReconnectInProgress = false;
-    reconnectionExhausted = false;
-    emitBtReconnectState();
-    window.dispatchEvent(new Event("networkBannerHide"));
-    return;
-  }
 
   btReconnectCancelled = false;
 
@@ -963,23 +1031,42 @@ export async function attemptBtReconnect() {
     emitBtReconnectState();
     window.dispatchEvent(new Event("networkBannerShow"));
 
+    let devices = [];
+    let fetchedDevices = false;
     try {
       const deviceListResp = await requestDevicesListDeduped(true);
-      const devices = (deviceListResp && deviceListResp.payload) || [];
-      const isAlreadyConnected = devices.some(
-        (device) => device.address === lastDeviceAddress && device.connected,
-      );
-
-      if (isAlreadyConnected && hasLiveBtSessionEvidence(lastDeviceAddress)) {
-        const connType = btConnectionTypeByDevice.get(lastDeviceAddress);
-        if (connType === "iap2") {
-          completeBtReconnectSuccess();
-        } else {
-          beginBtReconnectSettle(lastDeviceAddress);
-        }
-        return;
-      }
+      devices = getDevicesFromListResponse(deviceListResp);
+      fetchedDevices = true;
     } catch (_) {}
+
+    const deviceAddress =
+      getNextBtReconnectAddress(devices, lastDeviceAddress) ||
+      (!fetchedDevices ? lastDeviceAddress : null);
+
+    if (!deviceAddress) {
+      clearBtReconnectTimer();
+      resetBtReconnectCycle();
+      btReconnectAttempts = 0;
+      btReconnectInProgress = false;
+      reconnectionExhausted = false;
+      emitBtReconnectState();
+      window.dispatchEvent(new Event("networkBannerHide"));
+      return;
+    }
+
+    const isAlreadyConnected = devices.some(
+      (device) => device.address === deviceAddress && device.connected,
+    );
+
+    if (isAlreadyConnected && hasLiveBtSessionEvidence(deviceAddress)) {
+      const connType = btConnectionTypeByDevice.get(deviceAddress);
+      if (connType === "iap2") {
+        completeBtReconnectSuccess();
+      } else {
+        beginBtReconnectSettle(deviceAddress);
+      }
+      return;
+    }
 
     if (btReconnectCancelled) {
       btReconnectInProgress = false;
@@ -996,7 +1083,7 @@ export async function attemptBtReconnect() {
       window.dispatchEvent(new Event("networkScreenShow"));
     }
 
-    const response = await queueConnectRequest(lastDeviceAddress);
+    const response = await queueConnectRequest(deviceAddress);
 
     if (btReconnectCancelled) {
       btReconnectInProgress = false;
@@ -1007,12 +1094,13 @@ export async function attemptBtReconnect() {
     if (response && response.ok) {
       const data = await readConnectResponseJson(response);
       if (isConnectResponseConnected(data)) {
-        btActiveSessions.add(lastDeviceAddress);
-        const connType = btConnectionTypeByDevice.get(lastDeviceAddress);
+        localStorage.setItem("lastConnectedBluetoothDevice", deviceAddress);
+        btActiveSessions.add(deviceAddress);
+        const connType = btConnectionTypeByDevice.get(deviceAddress);
         if (connType === "iap2") {
           completeBtReconnectSuccess();
         } else {
-          beginBtReconnectSettle(lastDeviceAddress);
+          beginBtReconnectSettle(deviceAddress);
         }
         return;
       }
@@ -1084,10 +1172,22 @@ const handleBluetoothSingletonMessage = (data) => {
       manualDisconnectInProgress = false;
       return;
     }
+    const reconnectWasActive =
+      btReconnectInProgress || btReconnectTimer || btReconnectSettleDevice;
     if (btReconnectSettleDevice === ev.device) {
       clearBtReconnectSettle();
     }
+    if (reconnectWasActive) {
+      btReconnectInProgress = false;
+      btReconnectCancelled = false;
+      emitBtReconnectState();
+      if (!btReconnectTimer) {
+        scheduleBtReconnectRetry();
+      }
+      return;
+    }
     clearBtReconnectTimer();
+    resetBtReconnectCycle();
     btReconnectAttempts = 0;
     btReconnectInProgress = false;
     btReconnectCancelled = false;
@@ -1110,6 +1210,7 @@ const handleBluetoothSingletonOpen = () => {
   );
   if (!lastDeviceAddress) return;
   clearBtReconnectTimer();
+  resetBtReconnectCycle();
   btReconnectAttempts = 0;
   btReconnectInProgress = false;
   btReconnectCancelled = false;
@@ -1812,10 +1913,7 @@ export const useBluetooth = () => {
       try {
         isDevicesFetching = true;
         const resp = await requestDevicesListDeduped(force);
-        const list =
-          (resp && resp.payload) ||
-          (resp && resp.result && resp.result.payload) ||
-          [];
+        const list = getDevicesFromListResponse(resp);
         setDevices(list);
 
         const connectedList = list.filter((device) => device?.connected);
@@ -2042,6 +2140,7 @@ export const useBluetooth = () => {
         stopNetworkPolling();
         stopRetrying();
         clearBtReconnectSettle();
+        resetBtReconnectCycle();
         retryIsCancelled = true;
         isNetworkPollingActive = false;
 
@@ -2076,6 +2175,7 @@ export const useBluetooth = () => {
         setLoading(true);
         stopNetworkPolling();
         stopRetrying();
+        resetBtReconnectCycle();
         retryDeviceAddressRef.current = null;
 
         const resp = await sendWsRequest("bluetooth.device.unpair", {
