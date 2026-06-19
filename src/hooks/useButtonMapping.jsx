@@ -1,4 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import {
+  getActivePresetDeviceId,
+  setButtonMappingValue,
+} from "../utils/presetStorage";
 
 export function useButtonMapping({
   contentId,
@@ -26,24 +30,28 @@ export function useButtonMapping({
     (buttonNumber) => {
       if (!contentId || !contentType) return;
 
-      localStorage.setItem(`button${buttonNumber}Id`, contentId);
-      localStorage.setItem(`button${buttonNumber}Type`, contentType);
+      const deviceId = getActivePresetDeviceId();
+
+      setButtonMappingValue(buttonNumber, "Id", contentId, deviceId);
+      setButtonMappingValue(buttonNumber, "Type", contentType, deviceId);
       let imageToSave = contentImage;
       if (contentId === "37i9dQZF1EYkqdzj48dyYq") {
         imageToSave = "/images/radio-cover/dj.webp";
       } else if (contentType === "liked-songs" && !imageToSave) {
         imageToSave = "/images/liked-songs.webp";
       }
-      localStorage.setItem(`button${buttonNumber}Image`, imageToSave || "");
-      localStorage.setItem(`button${buttonNumber}Name`, contentName || "");
+      setButtonMappingValue(buttonNumber, "Image", imageToSave || "", deviceId);
+      setButtonMappingValue(buttonNumber, "Name", contentName || "", deviceId);
 
       if (
         (contentType === "mix" || contentType === "liked-songs") &&
         trackUrisRef.current.length > 0
       ) {
-        localStorage.setItem(
-          `button${buttonNumber}Tracks`,
+        setButtonMappingValue(
+          buttonNumber,
+          "Tracks",
           JSON.stringify(trackUrisRef.current),
+          deviceId,
         );
       }
 

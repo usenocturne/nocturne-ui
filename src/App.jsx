@@ -33,6 +33,10 @@ import NotificationsContainer from "./components/common/notifications/Notificati
 import NotificationBridge from "./components/common/notifications/NotificationBridge";
 import PairingScreen from "./components/screens/PairingScreen";
 import LockView from "./components/common/LockView";
+import {
+  getActivePresetDeviceId,
+  getButtonMappingValue,
+} from "./utils/presetStorage";
 import PowerMenuOverlay from "./components/common/overlays/PowerMenuOverlay";
 import VoiceOverlay from "./components/common/overlays/voice/VoiceOverlay";
 import { CheckIcon } from "./components/common/icons";
@@ -87,8 +91,9 @@ function useGlobalButtonMapping({
     async (buttonNumber) => {
       if (isProcessingButtonPress || isTutorialActive || isDisabled) return;
 
-      const mappedId = localStorage.getItem(`button${buttonNumber}Id`);
-      const mappedType = localStorage.getItem(`button${buttonNumber}Type`);
+      const deviceId = getActivePresetDeviceId();
+      const mappedId = getButtonMappingValue(buttonNumber, "Id", deviceId);
+      const mappedType = getButtonMappingValue(buttonNumber, "Type", deviceId);
 
       if (!mappedId || !mappedType) return;
 
@@ -109,8 +114,10 @@ function useGlobalButtonMapping({
         } else if (mappedType === "show") {
           contextUri = `spotify:show:${mappedId}`;
         } else if (mappedType === "mix") {
-          const mixTracksJson = localStorage.getItem(
-            `button${buttonNumber}Tracks`,
+          const mixTracksJson = getButtonMappingValue(
+            buttonNumber,
+            "Tracks",
+            deviceId,
           );
           if (mixTracksJson) {
             try {
@@ -125,8 +132,10 @@ function useGlobalButtonMapping({
           if (spotifyUserId) {
             contextUri = `spotify:user:${spotifyUserId}:collection`;
           } else {
-            const likedTracksJson = localStorage.getItem(
-              `button${buttonNumber}Tracks`,
+            const likedTracksJson = getButtonMappingValue(
+              buttonNumber,
+              "Tracks",
+              deviceId,
             );
             if (likedTracksJson) {
               try {
@@ -181,6 +190,7 @@ function useGlobalButtonMapping({
       isTutorialActive,
       isDisabled,
       currentPlayback,
+      spotifyUserId,
     ],
   );
 

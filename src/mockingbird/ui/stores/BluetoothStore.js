@@ -26,9 +26,18 @@ class BluetoothStore {
       runInAction(() => {
         this.bluetoothDeviceList = list;
         const connected = list.find((d) => d.connected);
-        if (connected) {
-          this.currentDevice = connected;
+        this.currentDevice = connected || null;
+
+        if (connected?.address) {
+          localStorage.setItem(
+            "lastConnectedBluetoothDevice",
+            connected.address,
+          );
         }
+        this.rootStore.presetsDataStore?.setActiveDeviceId(
+          connected?.address ||
+            localStorage.getItem("lastConnectedBluetoothDevice"),
+        );
       });
     } catch (e) {
       console.error("Failed to fetch bluetooth devices:", e);
@@ -51,6 +60,7 @@ class BluetoothStore {
         { timeoutMs: 15000 },
       );
       localStorage.setItem("lastConnectedBluetoothDevice", address);
+      this.rootStore.presetsDataStore?.setActiveDeviceId(address);
       await this.triggerBTDeviceList();
       return true;
     } catch (e) {

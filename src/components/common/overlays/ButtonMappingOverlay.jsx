@@ -1,5 +1,9 @@
 import React, { useEffect, useState, useRef, memo } from "react";
 import { useSpotifyWebSocket } from "../../../hooks/useSpotifyWebSocket";
+import {
+  getActivePresetDeviceId,
+  getButtonMappingValue,
+} from "../../../utils/presetStorage";
 
 const ButtonMappingOverlay = memo(function ButtonMappingOverlay({
   show,
@@ -22,24 +26,26 @@ const ButtonMappingOverlay = memo(function ButtonMappingOverlay({
       const images = {};
       const types = {};
       let hasChanged = false;
+      const deviceId = getActivePresetDeviceId();
 
       const promises = [1, 2, 3, 4].map(async (buttonNum) => {
-        const imageUrl = localStorage.getItem(`button${buttonNum}Image`);
-        const contentType = localStorage.getItem(`button${buttonNum}Type`);
+        const imageUrl = getButtonMappingValue(buttonNum, "Image", deviceId);
+        const contentType = getButtonMappingValue(buttonNum, "Type", deviceId);
+        const cacheKey = `${deviceId}:${buttonNum}`;
 
         if (imageUrl) {
           const isLocalImage =
             imageUrl.startsWith("/images/") || imageUrl.startsWith("images/");
 
           if (
-            !preloadImagesCacheRef.current[buttonNum] ||
-            preloadImagesCacheRef.current[buttonNum] !== imageUrl
+            !preloadImagesCacheRef.current[cacheKey] ||
+            preloadImagesCacheRef.current[cacheKey] !== imageUrl
           ) {
             if (isLocalImage) {
               const img = new Image();
               img.src = imageUrl;
-              preloadImagesCacheRef.current[buttonNum] = imageUrl;
-              preloadImagesCacheRef.current[buttonNum + "_data"] = imageUrl;
+              preloadImagesCacheRef.current[cacheKey] = imageUrl;
+              preloadImagesCacheRef.current[`${cacheKey}:data`] = imageUrl;
               hasChanged = true;
               images[buttonNum] = imageUrl;
               types[buttonNum] = contentType;
@@ -85,8 +91,8 @@ const ButtonMappingOverlay = memo(function ButtonMappingOverlay({
                   const img = new Image();
                   img.src = blobUrl;
 
-                  preloadImagesCacheRef.current[buttonNum] = imageUrl;
-                  preloadImagesCacheRef.current[buttonNum + "_data"] = blobUrl;
+                  preloadImagesCacheRef.current[cacheKey] = imageUrl;
+                  preloadImagesCacheRef.current[`${cacheKey}:data`] = blobUrl;
                   hasChanged = true;
                   images[buttonNum] = blobUrl;
                   types[buttonNum] = contentType;
@@ -103,7 +109,7 @@ const ButtonMappingOverlay = memo(function ButtonMappingOverlay({
             }
           } else {
             const cachedData =
-              preloadImagesCacheRef.current[buttonNum + "_data"];
+              preloadImagesCacheRef.current[`${cacheKey}:data`];
             if (cachedData) {
               images[buttonNum] = cachedData;
               types[buttonNum] = contentType;
@@ -114,9 +120,18 @@ const ButtonMappingOverlay = memo(function ButtonMappingOverlay({
 
       await Promise.all(promises);
 
+      const typeKeys = new Set([
+        ...Object.keys(types),
+        ...Object.keys(imageTypes),
+      ]);
+      const typesChanged = Array.from(typeKeys).some(
+        (key) => types[key] !== imageTypes[key],
+      );
+
       if (
         hasChanged ||
-        Object.keys(images).length !== Object.keys(preloadedImages).length
+        Object.keys(images).length !== Object.keys(preloadedImages).length ||
+        typesChanged
       ) {
         setPreloadedImages(images);
         setImageTypes(types);
@@ -135,7 +150,7 @@ const ButtonMappingOverlay = memo(function ButtonMappingOverlay({
         timerRef.current = null;
       }
     };
-  }, [show, preloadedImages, fetchImage, isSpotifyReady]);
+  }, [show, preloadedImages, imageTypes, fetchImage, isSpotifyReady]);
 
   useEffect(() => {
     return () => {

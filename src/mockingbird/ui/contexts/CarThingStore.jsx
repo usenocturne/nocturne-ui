@@ -3,7 +3,11 @@ import { runInAction } from "mobx";
 import { RootStore } from "../stores/RootStore";
 import { MockPersistentStorage, ErrorHandler } from "../stores/stubs";
 import { useCarThingSpotifyIntegration } from "../hooks/useCarThingSpotifyIntegration";
-import { sendNocturneWsRequest } from "../../../hooks/useNocturned";
+import {
+  sendNocturneWsRequest,
+  subscribeBluetoothConnectionState,
+} from "../../../hooks/useNocturned";
+import { getActivePresetDeviceId } from "../../../utils/presetStorage";
 
 const mockInterappActions = {
   getTts: (fileName) => console.log("Playing TTS:", fileName),
@@ -41,6 +45,20 @@ export const CarThingStoreProvider = ({
   playerControls,
 }) => {
   useCarThingSpotifyIntegration(rootStore, currentPlayback, playerControls);
+
+  useEffect(() => {
+    const unsubscribe = subscribeBluetoothConnectionState((state) => {
+      const connectedDevice = (state?.devices || []).find(
+        (device) => device?.connected,
+      );
+
+      rootStore.presetsDataStore?.setActiveDeviceId(
+        connectedDevice?.address || getActivePresetDeviceId(),
+      );
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     runInAction(() => {

@@ -100,7 +100,7 @@ daemon → WebSocket event → useNocturned → VoiceStore (mockingbird)
 | Add/modify a setting                  | `components/Settings/<Section>/` + `SettingsStore`                                                                                             |
 | Onboarding flow                       | `components/Onboarding/` + `OnboardingStore`                                                                                                   |
 | Voice UI                              | `components/Listening/*` + `VoiceStore`                                                                                                        |
-| Presets long-press mapping            | `PresetsStore` (`PresetsController` + `PresetsDataStore`)                                                                                      |
+| Presets long-press mapping            | `PresetsStore` (`PresetsController` + `PresetsDataStore`) with device-scoped keys from `src/utils/presetStorage.js`                            |
 | Overlay (modal / banner) stack        | `components/Overlays/Overlay.jsx` + `createOverlayController` (stub) + `BannerStore`                                                           |
 | Global store debug handles            | `RootStore.constructor` sets `window.carThingRootStore`, `window.testShelf`, `window.testPresets`, `window.showPresets`, `window.testHardware` |
 
@@ -109,6 +109,7 @@ daemon → WebSocket event → useNocturned → VoiceStore (mockingbird)
 - **MobX observer pattern**: Components wrapped in `observer()` from `mobx-react-lite`
 - **SCSS modules only**: `import styles from './Foo.module.scss'` — NOT Tailwind
 - **Store access**: `useCarThingStore()` from `contexts/CarThingStore.jsx` → returns the singleton `rootStore` (plus Nocturne-bridged fields: `spotifyData`, `currentPlayback`, `playerControls`, `playbackProgress`, `onSeek`)
+- **Preset persistence is per paired phone:** `PresetsDataStore` stores slots under `mockingbird_presets:<bluetooth-address>` and migrates the old global/scoped `nocturne_presets` keys through `src/utils/presetStorage.js`.
 - **Global store ref**: `window.carThingRootStore` set in `RootStore.constructor` for cross-UI access (Nocturne's `App.jsx` uses it for settings toggles)
 - **Spotify Circular font**: Resolved by the real fontconfig family name **`"Circular Sp UI v3 T"`** (the typographic family on `CircularSpUIv3T-{Book,Bold,Black}.ttf` — name ID 16). The legacy alias `spotify-circular` is NOT a real family on the kiosk; the `@font-face` rules that used to inject that alias were removed when the kiosk was switched to system-installed fonts. No `@font-face` is shipped by the app — `public/fonts/CircularSp*.woff2` exist solely so developers can install the same fonts locally to preview the skin. The Latin-glyph file is what matters for rendering; the script-specific `CircularSp-{Arab,Cyrl,Deva,Grek,Hebr}` files have empty family names in their TTF/woff2 metadata and would need a kiosk-side fontconfig alias to be reachable from CSS.
 - **React 19 transitions**: Use `CSSTransitionCompat.jsx` (wraps react-transition-group for strict mode / concurrent rendering)

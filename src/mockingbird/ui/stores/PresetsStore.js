@@ -1,4 +1,10 @@
-import { makeAutoObservable, get, action } from "mobx";
+import { makeAutoObservable, action } from "mobx";
+import {
+  getActivePresetDeviceId,
+  getMockingbirdPresetsStorageKey,
+  migrateLegacyMockingbirdPresets,
+  normalizePresetDeviceId,
+} from "../../../utils/presetStorage";
 
 export const PRESET_NUMBERS = [1, 2, 3, 4];
 
@@ -142,6 +148,7 @@ export class PresetsUiState {
   }
 
   loadPreset(presetNumber) {
+    this.presetsDataStore.syncActiveDeviceFromStorage();
     const preset = this.presetsDataStore.getPreset(presetNumber);
 
     if (!preset) {
@@ -158,6 +165,7 @@ export class PresetsUiState {
   }
 
   async saveCurrentContextToPreset(presetNumber) {
+    this.presetsDataStore.syncActiveDeviceFromStorage();
     const currentUri = this.getCurrentSaveableUri();
 
     if (!currentUri) {
@@ -417,6 +425,7 @@ export class PresetsUiState {
   }
 
   showPresets() {
+    this.presetsDataStore.syncActiveDeviceFromStorage();
     this.isShowingPresets = true;
 
     if (this.presetsTimeout) {
@@ -457,10 +466,27 @@ export class PresetsUiState {
 export class PresetsDataStore {
   presets = {};
   unavailablePresets = new Set();
+  activeDeviceId = getActivePresetDeviceId();
 
   constructor() {
     makeAutoObservable(this);
     this.loadPresetsFromStorage();
+  }
+
+  setActiveDeviceId(deviceId) {
+    const nextDeviceId = normalizePresetDeviceId(deviceId);
+    if (nextDeviceId === this.activeDeviceId) return;
+
+    this.activeDeviceId = nextDeviceId;
+    this.loadPresetsFromStorage();
+  }
+
+  syncActiveDeviceFromStorage() {
+    this.setActiveDeviceId(getActivePresetDeviceId());
+  }
+
+  get storageKey() {
+    return getMockingbirdPresetsStorageKey(this.activeDeviceId);
   }
 
   getPreset(presetNumber) {
@@ -473,6 +499,8 @@ export class PresetsDataStore {
 
   async savePreset(uri, slotIndex, source, tempPresetData) {
     try {
+      this.syncActiveDeviceFromStorage();
+
       const presetData = {
         context_uri: uri,
         slot_index: slotIndex,
@@ -492,9 +520,15 @@ export class PresetsDataStore {
 
   loadPresetsFromStorage() {
     try {
-      const stored = localStorage.getItem("nocturne_presets");
+      migrateLegacyMockingbirdPresets(this.activeDeviceId);
+
+      const stored = localStorage.getItem(this.storageKey);
       if (stored) {
-        this.presets = JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        this.presets =
+          parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? parsed
+            : {};
         this.refreshPresetImages();
       } else {
         this.setDefaultPresets();
@@ -526,6 +560,8 @@ export class PresetsDataStore {
   }
 
   async refreshPresetImages() {
+    const deviceId = this.activeDeviceId;
+
     try {
       const { sendNocturneWsRequest } =
         await import("../../../hooks/useNocturned");
@@ -540,6 +576,7 @@ export class PresetsDataStore {
               { id: playlistId, fields: "name,images" },
               { timeoutMs: 5000 },
             );
+            if (deviceId !== this.activeDeviceId) return;
             if (result?.images?.[0]?.url) {
               this.presets[slotIndex] = {
                 ...preset,
@@ -550,19 +587,26 @@ export class PresetsDataStore {
           } catch {}
         }
       }
-      this.savePresetsToStorage();
+      if (deviceId === this.activeDeviceId) {
+        this.savePresetsToStorage(deviceId);
+      }
     } catch {}
   }
 
-  savePresetsToStorage() {
+  savePresetsToStorage(deviceId = this.activeDeviceId) {
     try {
-      localStorage.setItem("nocturne_presets", JSON.stringify(this.presets));
+      localStorage.setItem(
+        getMockingbirdPresetsStorageKey(deviceId),
+        JSON.stringify(this.presets),
+      );
     } catch (error) {
       console.error("Error saving presets to localStorage:", error);
     }
   }
 
   loadPresets() {
+    this.syncActiveDeviceFromStorage();
+    this.loadPresetsFromStorage();
     return Promise.resolve();
   }
 
