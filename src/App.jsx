@@ -299,7 +299,9 @@ function NotificationEffects({
   return null;
 }
 
-function App() {
+function AppContent() {
+  const { settings } = useSettings();
+  const isMockingbirdEnabled = settings?.mockingbirdUiEnabled === true;
   const { isSubscribed, hasPhoneAccess } = useSubscription();
   const [appPlatform, setAppPlatform] = useState(null);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -444,6 +446,8 @@ function App() {
     (Array.isArray(devices) && devices.length > 0) ||
     (Array.isArray(connectedDevices) && connectedDevices.length > 0) ||
     Boolean(lastConnectedDevice);
+  const hasKnownBluetoothDevice =
+    hasDevices || Boolean(localStorage.getItem("lastConnectedBluetoothDevice"));
 
   const [hadBtConnection, setHadBtConnection] = useState(false);
   useEffect(() => {
@@ -808,10 +812,7 @@ function App() {
     refreshPlaybackState,
     setActiveSection,
     isTutorialActive: showTutorial,
-    isDisabled:
-      powerMenuVisible ||
-      isUpdating ||
-      localStorage.getItem("mockingbirdUiEnabled") === "true",
+    isDisabled: powerMenuVisible || isUpdating || isMockingbirdEnabled,
     currentPlayback,
     spotifyUserId,
   });
@@ -1118,7 +1119,7 @@ function App() {
         return;
       }
 
-      if (localStorage.getItem("mockingbirdUiEnabled") === "true") {
+      if (isMockingbirdEnabled) {
         window.carThingRootStore?.uiState?.toggleSettings();
         return;
       }
@@ -1144,7 +1145,7 @@ function App() {
       window.removeEventListener("keyup", handleKeyUp, { capture: true });
       if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
     };
-  }, [showTutorial, currentTutorialStep, showAuthScreen]);
+  }, [showTutorial, currentTutorialStep, showAuthScreen, isMockingbirdEnabled]);
 
   const handleShutdown = () => {
     fetch("http://localhost:5000/device/power/shutdown", {
@@ -1163,9 +1164,7 @@ function App() {
   const handleTutorialComplete = () => {
     setShowTutorial(false);
     setCurrentTutorialStep(0);
-    const isMockingbirdActive =
-      localStorage.getItem("mockingbirdUiEnabled") === "true";
-    if (isMockingbirdActive) {
+    if (isMockingbirdEnabled) {
       localStorage.setItem("hasSeenMockingbirdOnboarding", "true");
       setHasSeenMockingbirdOnboardingFlag(true);
     } else {
@@ -1256,16 +1255,13 @@ function App() {
       showExhaustedReconnectScreen);
   // const showConnectionLostScreen = false;
 
-  const isMockingbirdSetting =
-    localStorage.getItem("mockingbirdUiEnabled") === "true";
-
   const showSubscriptionScreen =
     appReady &&
     appPlatform !== null &&
     appPlatform !== "web" &&
     hasPhoneAccess === false;
 
-  const isMockingbird = isMockingbirdSetting;
+  const isMockingbird = isMockingbirdEnabled;
 
   const displayNetworkBanner =
     showNetworkBanner &&
@@ -1285,7 +1281,7 @@ function App() {
           ? "subscription"
           : !hasSeenMockingbirdOnboardingFlag &&
               (isSpotifyAuthenticated || isSpotifySkipped) &&
-              hasDevices
+              hasKnownBluetoothDevice
             ? "tutorial"
             : showAuthScreen
               ? "auth"
@@ -1396,107 +1392,113 @@ function App() {
   }
 
   return (
-    <SettingsProvider>
-      <OTAProvider>
-        <AutoUpdateManager />
-        <NotificationProvider>
-          <NotificationBridge />
-          <NotificationEffects
-            isUpdating={isUpdating}
-            updateStatus={updateStatus}
-            activeSection={activeSection}
-            handleReboot={handleReboot}
-            isError={isError}
-            errorMessage={errorMessage}
+    <OTAProvider>
+      <AutoUpdateManager />
+      <NotificationProvider>
+        <NotificationBridge />
+        <NotificationEffects
+          isUpdating={isUpdating}
+          updateStatus={updateStatus}
+          activeSection={activeSection}
+          handleReboot={handleReboot}
+          isError={isError}
+          errorMessage={errorMessage}
+        />
+        {!showConnectionLostScreen && !showTutorial && (
+          <UpdateCheckNotification
+            setActiveSection={setActiveSection}
+            currentVersion={nocturneVersion}
           />
-          {!showConnectionLostScreen && !showTutorial && (
-            <UpdateCheckNotification
-              setActiveSection={setActiveSection}
-              currentVersion={nocturneVersion}
-            />
-          )}
-          <VoiceProvider suppressed={voiceSuppressed}>
-            <DeviceSwitcherContext.Provider value={deviceSwitcherContextValue}>
-              <Router>
-                <main className="overflow-hidden relative min-h-screen rounded-2xl nocturne-font-stack">
-                  <GradientBackground
-                    gradientState={gradientState}
-                    className="bg-black"
-                  />
+        )}
+        <VoiceProvider suppressed={voiceSuppressed}>
+          <DeviceSwitcherContext.Provider value={deviceSwitcherContextValue}>
+            <Router>
+              <main className="overflow-hidden relative min-h-screen rounded-2xl nocturne-font-stack">
+                <GradientBackground
+                  gradientState={gradientState}
+                  className="bg-black"
+                />
 
-                  <div className="relative z-10">
-                    <UIShell
-                      isMockingbird={isMockingbird}
-                      mockingbirdProps={{
-                        currentPlayback,
-                        playerControls,
-                        spotifyData: {
-                          recentAlbums,
-                          userPlaylists,
-                          topArtists,
-                          likedSongs,
-                          radioMixes,
-                          userShows,
-                          spotifyUserId,
-                          initialDataLoaded,
-                        },
-                        playbackProgress,
-                        systemScreen: mockingbirdSystemScreen,
-                        onTutorialComplete: handleTutorialComplete,
-                      }}
-                    >
-                      {content}
-                    </UIShell>
-                    {!showTetheringScreen &&
-                      !showConnectionLostScreen &&
-                      !showTutorial && (
-                        <>
-                          {pairingRequest ? (
-                            isMockingbird ? (
-                              <MockingbirdPairingOverlay
-                                pin={pairingRequest.pairingKey}
-                              />
-                            ) : (
-                              <PairingScreen
-                                pin={pairingRequest.pairingKey}
-                                isConnecting={isConnecting}
-                                onAccept={acceptPairing}
-                                onReject={denyPairing}
-                              />
-                            )
-                          ) : null}
-                        </>
-                      )}
-                    <NetworkBanner
-                      visible={displayNetworkBanner}
-                      onClose={() => setShowNetworkBanner(false)}
-                    />
-                    <DeviceSwitcherModal
-                      isOpen={isDeviceSwitcherOpen}
-                      onClose={handleCloseDeviceSwitcher}
-                      initialDevices={prefetchedDevices}
-                    />
-                    {!showTutorial && (
-                      <ButtonMappingOverlay
-                        show={showGlobalMappingOverlay}
-                        activeButton={globalActiveButton}
-                      />
+                <div className="relative z-10">
+                  <UIShell
+                    isMockingbird={isMockingbird}
+                    mockingbirdProps={{
+                      currentPlayback,
+                      playerControls,
+                      spotifyData: {
+                        recentAlbums,
+                        userPlaylists,
+                        topArtists,
+                        likedSongs,
+                        radioMixes,
+                        userShows,
+                        spotifyUserId,
+                        initialDataLoaded,
+                      },
+                      playbackProgress,
+                      systemScreen: mockingbirdSystemScreen,
+                      onTutorialComplete: handleTutorialComplete,
+                    }}
+                  >
+                    {content}
+                  </UIShell>
+                  {!showTetheringScreen &&
+                    !showConnectionLostScreen &&
+                    !showTutorial && (
+                      <>
+                        {pairingRequest ? (
+                          isMockingbird ? (
+                            <MockingbirdPairingOverlay
+                              pin={pairingRequest.pairingKey}
+                            />
+                          ) : (
+                            <PairingScreen
+                              pin={pairingRequest.pairingKey}
+                              isConnecting={isConnecting}
+                              onAccept={acceptPairing}
+                              onReject={denyPairing}
+                            />
+                          )
+                        ) : null}
+                      </>
                     )}
-                    <PowerMenuOverlay
-                      show={powerMenuVisible}
-                      onShutdown={handleShutdown}
-                      onReboot={handleReboot}
-                      onClose={() => setPowerMenuVisible(false)}
+                  <NetworkBanner
+                    visible={displayNetworkBanner}
+                    onClose={() => setShowNetworkBanner(false)}
+                  />
+                  <DeviceSwitcherModal
+                    isOpen={isDeviceSwitcherOpen}
+                    onClose={handleCloseDeviceSwitcher}
+                    initialDevices={prefetchedDevices}
+                  />
+                  {!showTutorial && (
+                    <ButtonMappingOverlay
+                      show={showGlobalMappingOverlay}
+                      activeButton={globalActiveButton}
                     />
-                  </div>
-                </main>
-                <VoiceOverlay />
-                <NotificationsContainer />
-              </Router>
-            </DeviceSwitcherContext.Provider>
-          </VoiceProvider>
-        </NotificationProvider>
-      </OTAProvider>
+                  )}
+                  <PowerMenuOverlay
+                    show={powerMenuVisible}
+                    onShutdown={handleShutdown}
+                    onReboot={handleReboot}
+                    onClose={() => setPowerMenuVisible(false)}
+                  />
+                </div>
+              </main>
+              <VoiceOverlay />
+              <NotificationsContainer />
+            </Router>
+          </DeviceSwitcherContext.Provider>
+        </VoiceProvider>
+      </NotificationProvider>
+    </OTAProvider>
+  );
+}
+
+function App() {
+  return (
+    <SettingsProvider>
+      <AppContent />
     </SettingsProvider>
   );
 }
