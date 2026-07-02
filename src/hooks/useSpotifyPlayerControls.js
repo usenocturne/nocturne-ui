@@ -99,6 +99,16 @@ export function useSpotifyPlayerControls(currentPlayback = null) {
     [isAdjustingVolume, isPhoneMedia, isSmartphoneDevice],
   );
 
+  const sendPhoneMediaControl = useCallback(async (method) => {
+    try {
+      await sendNocturneWsRequest(method, {});
+      return true;
+    } catch (err) {
+      console.error(`Error sending phone media control (${method}):`, err);
+      return false;
+    }
+  }, []);
+
   const playTrack = useCallback(
     async (trackUri, contextUri = null, uris = null, deviceId = null) => {
       if (!isSpotifyReady) return false;
@@ -117,9 +127,41 @@ export function useSpotifyPlayerControls(currentPlayback = null) {
         }, 100);
         return true;
       } catch (err) {
+        const errorMessage = err?.message || String(err);
+        const isResumePlaybackRequest =
+          !trackUri && !contextUri && !deviceId && (!uris || uris.length === 0);
+        const activeDeviceType = getActiveDeviceType();
+        const shouldFallbackToPhoneMediaPlay =
+          isResumePlaybackRequest &&
+          (isSmartphoneDevice || activeDeviceType === "SMARTPHONE");
+
+        if (shouldFallbackToPhoneMediaPlay) {
+          console.warn(
+            "Spotify resume failed on smartphone; falling back to phone media play:",
+            errorMessage,
+          );
+
+          const fallbackSucceeded =
+            await sendPhoneMediaControl("media.control.play");
+
+          if (fallbackSucceeded) {
+            setTimeout(async () => {
+              try {
+                await getPlayerState();
+              } catch (refreshErr) {
+                console.error(
+                  "Error fetching player state after phone media play fallback:",
+                  refreshErr.message,
+                );
+              }
+            }, 300);
+            return true;
+          }
+        }
+
         if (
-          (err.message.includes("NO_ACTIVE_DEVICE") ||
-            err.message.includes("No playback devices available")) &&
+          (errorMessage.includes("NO_ACTIVE_DEVICE") ||
+            errorMessage.includes("No playback devices available")) &&
           !deviceId
         ) {
           if (openDeviceSwitcher) {
@@ -133,11 +175,18 @@ export function useSpotifyPlayerControls(currentPlayback = null) {
             });
           }
         }
-        console.error("Error playing track:", err.message);
+        console.error("Error playing track:", errorMessage);
         return false;
       }
     },
-    [isSpotifyReady, playTrackWS, openDeviceSwitcher, getPlayerState],
+    [
+      isSpotifyReady,
+      playTrackWS,
+      openDeviceSwitcher,
+      getPlayerState,
+      isSmartphoneDevice,
+      sendPhoneMediaControl,
+    ],
   );
 
   const pausePlayback = useCallback(async () => {
@@ -555,16 +604,6 @@ export function useSpotifyPlayerControls(currentPlayback = null) {
     },
     [isSpotifyReady, sendSpotifyCommand, getPlayerState],
   );
-
-  const sendPhoneMediaControl = useCallback(async (method) => {
-    try {
-      await sendNocturneWsRequest(method, {});
-      return true;
-    } catch (err) {
-      console.error(`Error sending phone media control (${method}):`, err);
-      return false;
-    }
-  }, []);
 
   const phoneMediaPlay = useCallback(
     () => sendPhoneMediaControl("media.control.play"),
