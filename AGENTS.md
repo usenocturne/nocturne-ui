@@ -80,6 +80,10 @@ Overlays render outside the switch: `PairingScreen`/`MockingbirdPairingOverlay`,
 | Icon library                          | `src/components/common/icons/index.jsx` (76 icons (75 original + `ShuffleActiveIcon` for voice confirmations), barrel exported)                                                                                                                                                           |
 | Voice assistant overlay               | `src/components/common/overlays/voice/` + `src/contexts/VoiceContext.jsx`                                                                                                                                                                                                                 |
 
+### Voice Cancel Contract
+
+Both UI skins must send `audio.record.stop` and `voice.cancel` when dismissing an active voice session. `audio.record.stop` halts daemon capture; `voice.cancel` is forwarded to the phone app so transcription, AI, TTS, and audio ducking are reset even if recording already ended by silence.
+
 ## CONVENTIONS
 
 - **No TypeScript.** Every file is `.js`/`.jsx`. ESLint rule: `no-unused-vars` allows `^[A-Z_]` (unused Icon imports tolerated).

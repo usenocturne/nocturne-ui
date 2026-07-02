@@ -463,7 +463,8 @@ class VoiceStore {
     this.rootStore.shelfStore.clearVoiceItems();
     this._resetVoiceTurnTracking();
     this._clearVoiceResultTimers();
-    sendNocturneWsRequest("audio.record.stop", {});
+    sendNocturneWsRequest("audio.record.stop", {}).catch(() => {});
+    sendNocturneWsRequest("voice.cancel", {}).catch(() => {});
     this.rootStore.overlayController.hideVoice();
     this._clearCaptureTimeout();
     this._clearAITimeout();
