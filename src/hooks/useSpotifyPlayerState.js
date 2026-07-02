@@ -96,6 +96,7 @@ export function useSpotifyPlayerState(immediateLoad = false) {
   const [initialFetchInProgress, setInitialFetchInProgress] = useState(false);
   const [isReceivingNowPlayingUpdates, setIsReceivingNowPlayingUpdates] =
     useState(false);
+  const [playerEventSequence, setPlayerEventSequence] = useState(0);
 
   const initialStateLoadedRef = useRef(false);
   const lastPlayedAlbumIdRef = useRef(null);
@@ -491,6 +492,10 @@ export function useSpotifyPlayerState(immediateLoad = false) {
     }, 5000);
   }, []);
 
+  const markPlayerEvent = useCallback(() => {
+    setPlayerEventSequence((sequence) => sequence + 1);
+  }, []);
+
   useEffect(() => {
     if (isSpotifyReady && !initialPlaybackFetchDone) {
       initialPlaybackFetchDone = true;
@@ -516,6 +521,7 @@ export function useSpotifyPlayerState(immediateLoad = false) {
           data.topic === "spotify.player.state_changed" ||
           data.topic === "spotify.player.volume_changed")
       ) {
+        markPlayerEvent();
         lastDealerEventTimestamp = Date.now();
         const payloads = data.data?.payloads || [];
 
@@ -767,11 +773,12 @@ export function useSpotifyPlayerState(immediateLoad = false) {
     });
 
     return cleanup;
-  }, [isSpotifyReady, processPlaybackState]);
+  }, [isSpotifyReady, markPlayerEvent, processPlaybackState]);
 
   useEffect(() => {
     const handlePhoneMediaEvent = (data) => {
       if (data.type === "event" && data.topic === "media.nowPlaying.update") {
+        markPlayerEvent();
         const media = data.data?.MediaItemAttributes;
         const playback = data.data?.PlaybackAttributes;
 
@@ -1345,7 +1352,12 @@ export function useSpotifyPlayerState(immediateLoad = false) {
     return () => {
       cleanup();
     };
-  }, [processPlaybackState, beginNowPlayingUpdateWindow, getPlayerState]);
+  }, [
+    processPlaybackState,
+    beginNowPlayingUpdateWindow,
+    getPlayerState,
+    markPlayerEvent,
+  ]);
 
   const refreshPlaybackState = useCallback(
     async (forceRefresh = false) => {
@@ -1393,5 +1405,6 @@ export function useSpotifyPlayerState(immediateLoad = false) {
     error,
     refreshPlaybackState,
     isReceivingNowPlayingUpdates,
+    playerEventSequence,
   };
 }

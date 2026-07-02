@@ -45,6 +45,10 @@ export function SettingsProvider({ children }) {
     lyricsMenuEnabled: getDefaultSettingValue("lyricsMenuEnabled", true),
     elapsedTimeEnabled: getDefaultSettingValue("elapsedTimeEnabled", false),
     idleLockEnabled: getDefaultSettingValue("idleLockEnabled", false),
+    idleDisplaySleepEnabled: getDefaultSettingValue(
+      "idleDisplaySleepEnabled",
+      false,
+    ),
     remainingTimeEnabled: getDefaultSettingValue("remainingTimeEnabled", false),
     showStatusBar: getDefaultSettingValue("showStatusBar", true),
     startWithNowPlaying: getDefaultSettingValue("startWithNowPlaying", true),

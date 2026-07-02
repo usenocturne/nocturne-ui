@@ -148,6 +148,7 @@ export function useSpotifyData(activeSection, skipInitialFetch = false) {
     error: playerError,
     refreshPlaybackState,
     isReceivingNowPlayingUpdates,
+    playerEventSequence,
   } = useSpotifyPlayerState();
 
   const playerControls = useSpotifyPlayerControls(currentPlayback);
@@ -1402,6 +1403,7 @@ export function useSpotifyData(activeSection, skipInitialFetch = false) {
     playerError,
     refreshPlaybackState,
     isReceivingNowPlayingUpdates,
+    playerEventSequence,
     playerControls,
     recentAlbums,
     userPlaylists,

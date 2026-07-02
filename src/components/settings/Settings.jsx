@@ -67,9 +67,17 @@ const settingsStructure = {
         id: "idle-lock",
         title: "Auto-lock when idle",
         type: "toggle",
-        description:
-          "Lock Now Playing after being idle for 5 minutes. Returns on resume.",
+        description: "Show the lock screen after 5 minutes of inactivity.",
         storageKey: "idleLockEnabled",
+        defaultValue: false,
+      },
+      {
+        id: "idle-display-sleep",
+        title: "Backlight off when idle",
+        type: "toggle",
+        description:
+          "Turn the backlight off after 20 minutes of inactivity. Tap or press a button to wake.",
+        storageKey: "idleDisplaySleepEnabled",
         defaultValue: false,
       },
       {

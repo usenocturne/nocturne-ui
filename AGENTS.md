@@ -84,6 +84,10 @@ Overlays render outside the switch: `PairingScreen`/`MockingbirdPairingOverlay`,
 
 Both UI skins must send `audio.record.stop` and `voice.cancel` when dismissing an active voice session. `audio.record.stop` halts daemon capture; `voice.cancel` is forwarded to the phone app so transcription, AI, TTS, and audio ducking are reset even if recording already ended by silence.
 
+### Display Sleep Contract
+
+The rightmost top button opens the lock screen; it must not immediately turn off the backlight. The General setting `idleLockEnabled` auto-locks after 5 minutes of inactivity. The separate `idleDisplaySleepEnabled` setting turns the backlight off after 20 minutes of inactivity by sending `device.display.sleep` on the existing `nocturned` WebSocket and wakes with `device.display.wake` on the first wake input or player event. The daemon owns transient backlight restore, including auto-brightness restart. Do not implement sleep by calling `device.brightness.set`; it persists manual brightness and can leave the device saved at the dimmest value.
+
 ## CONVENTIONS
 
 - **No TypeScript.** Every file is `.js`/`.jsx`. ESLint rule: `no-unused-vars` allows `^[A-Z_]` (unused Icon imports tolerated).

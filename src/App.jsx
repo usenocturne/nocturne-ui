@@ -53,6 +53,11 @@ const LazyBTPairing = React.lazy(
   () => import("./mockingbird/ui/components/Setup/BTPairing"),
 );
 
+const IDLE_LOCK_MS = 5 * 60 * 1000;
+const DISPLAY_IDLE_SLEEP_MS = 20 * 60 * 1000;
+const DISPLAY_SLEEP_REQUEST_TIMEOUT_MS = 5000;
+const DISPLAY_WAKE_INPUT_SUPPRESS_MS = 700;
+
 function MockingbirdPairingOverlay({ pin }) {
   return (
     <div
@@ -323,8 +328,19 @@ function AppContent() {
   const [playbackIntentOnDeviceSwitch, setPlaybackIntentOnDeviceSwitch] =
     useState(null);
   const [prefetchedDevices, setPrefetchedDevices] = useState(null);
+  const [displaySleepOverlayVisible, setDisplaySleepOverlayVisible] =
+    useState(false);
   const [powerMenuVisible, setPowerMenuVisible] = useState(false);
   const powerMenuVisibleRef = useRef(false);
+  const displaySleepingRef = useRef(false);
+  const displaySleepRequestedRef = useRef(false);
+  const displaySleepDesiredRef = useRef(false);
+  const displaySleepOperationRef = useRef(0);
+  const displaySleepRequestPromiseRef = useRef(null);
+  const displayWakeRequestPromiseRef = useRef(null);
+  const wakeInputBlockUntilRef = useRef(0);
+  const ignoreWakeLockButtonReleaseRef = useRef(false);
+  const [displayWakeSequence, setDisplayWakeSequence] = useState(0);
   const [showNetworkBanner, setShowNetworkBanner] = useState(false);
   const [showExhaustedReconnectScreen, setShowExhaustedReconnectScreen] =
     useState(false);
@@ -363,6 +379,7 @@ function AppContent() {
     playerError,
     refreshPlaybackState,
     isReceivingNowPlayingUpdates,
+    playerEventSequence,
     playerControls,
     recentAlbums,
     userPlaylists,
@@ -1010,6 +1027,229 @@ function AppContent() {
     }
   }, [showTetheringScreen, enableNetworking]);
 
+  const markDisplayAwake = useCallback(() => {
+    displaySleepingRef.current = false;
+    displaySleepRequestedRef.current = false;
+    displaySleepDesiredRef.current = false;
+    setDisplaySleepOverlayVisible(false);
+  }, []);
+
+  const markDisplaySleeping = useCallback(() => {
+    displaySleepingRef.current = true;
+    displaySleepRequestedRef.current = true;
+    displaySleepDesiredRef.current = true;
+    setDisplaySleepOverlayVisible(true);
+  }, []);
+
+  const wakeDisplay = useCallback(() => {
+    const wasSleeping =
+      displaySleepingRef.current || displaySleepRequestedRef.current;
+    const shouldSendWake =
+      displaySleepRequestedRef.current || displaySleepRequestPromiseRef.current;
+
+    displaySleepDesiredRef.current = false;
+
+    if (wasSleeping) {
+      wakeInputBlockUntilRef.current =
+        Date.now() + DISPLAY_WAKE_INPUT_SUPPRESS_MS;
+    }
+
+    if (!shouldSendWake) return;
+    if (displayWakeRequestPromiseRef.current) {
+      return displayWakeRequestPromiseRef.current;
+    }
+
+    const wakeGeneration = ++displaySleepOperationRef.current;
+
+    const sendWakeRequest = () => {
+      if (
+        displaySleepDesiredRef.current ||
+        displaySleepOperationRef.current !== wakeGeneration
+      ) {
+        return null;
+      }
+
+      return sendNocturneWsRequest(
+        "device.display.wake",
+        {},
+        { timeoutMs: DISPLAY_SLEEP_REQUEST_TIMEOUT_MS },
+      )
+        .then((result) => {
+          if (
+            !displaySleepDesiredRef.current &&
+            displaySleepOperationRef.current === wakeGeneration
+          ) {
+            markDisplayAwake();
+            setDisplayWakeSequence((sequence) => sequence + 1);
+          }
+          return result;
+        })
+        .catch((err) => {
+          if (
+            !displaySleepDesiredRef.current &&
+            displaySleepOperationRef.current === wakeGeneration
+          ) {
+            displaySleepingRef.current = true;
+            displaySleepRequestedRef.current = true;
+            setDisplaySleepOverlayVisible(true);
+          }
+          console.error("Failed to wake display:", err);
+          return null;
+        });
+    };
+
+    const pendingSleepRequest = displaySleepRequestPromiseRef.current;
+    const wakeRequest = (
+      pendingSleepRequest
+        ? pendingSleepRequest.catch(() => null).then(sendWakeRequest)
+        : sendWakeRequest()
+    )?.finally(() => {
+      if (displayWakeRequestPromiseRef.current === wakeRequest) {
+        displayWakeRequestPromiseRef.current = null;
+      }
+    });
+
+    displayWakeRequestPromiseRef.current = wakeRequest;
+    return wakeRequest;
+  }, [markDisplayAwake]);
+
+  const sleepDisplay = useCallback(() => {
+    displaySleepDesiredRef.current = true;
+
+    displaySleepingRef.current = true;
+    displaySleepRequestedRef.current = true;
+    setDisplaySleepOverlayVisible(true);
+
+    if (displaySleepRequestPromiseRef.current) {
+      return displaySleepRequestPromiseRef.current;
+    }
+
+    const sleepGeneration = ++displaySleepOperationRef.current;
+
+    const sleepRequest = sendNocturneWsRequest(
+      "device.display.sleep",
+      {},
+      { timeoutMs: DISPLAY_SLEEP_REQUEST_TIMEOUT_MS },
+    )
+      .catch((err) => {
+        if (
+          displaySleepDesiredRef.current &&
+          displaySleepOperationRef.current === sleepGeneration
+        ) {
+          displaySleepingRef.current = true;
+          displaySleepRequestedRef.current = true;
+          setDisplaySleepOverlayVisible(true);
+        }
+        console.error("Failed to sleep display:", err);
+      })
+      .finally(() => {
+        if (displaySleepRequestPromiseRef.current === sleepRequest) {
+          displaySleepRequestPromiseRef.current = null;
+        }
+      });
+
+    displaySleepRequestPromiseRef.current = sleepRequest;
+    return sleepRequest;
+  }, []);
+
+  useEffect(() => {
+    if (isMockingbirdEnabled) {
+      wakeDisplay();
+    }
+  }, [isMockingbirdEnabled, wakeDisplay]);
+
+  useEffect(() => () => wakeDisplay(), [wakeDisplay]);
+
+  useEffect(() => {
+    if (!wsConnected || isMockingbirdEnabled) return;
+
+    let cancelled = false;
+
+    sendNocturneWsRequest(
+      "device.display.get",
+      {},
+      { timeoutMs: DISPLAY_SLEEP_REQUEST_TIMEOUT_MS },
+    )
+      .then((result) => {
+        if (cancelled) return;
+        const displayState = result?.result ?? result;
+        if (displayState?.sleeping === true) {
+          markDisplaySleeping();
+        } else if (
+          !displaySleepDesiredRef.current &&
+          !displayWakeRequestPromiseRef.current
+        ) {
+          markDisplayAwake();
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Failed to get display state:", err);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    wsConnected,
+    isMockingbirdEnabled,
+    markDisplayAwake,
+    markDisplaySleeping,
+  ]);
+
+  useEffect(() => {
+    if (isMockingbirdEnabled) return;
+
+    const stopWakeEvent = (event) => {
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) {
+        event.stopImmediatePropagation();
+      }
+    };
+
+    const handleWakeInput = (event) => {
+      const isSleeping =
+        displaySleepingRef.current || displaySleepRequestedRef.current;
+
+      if (isSleeping) {
+        stopWakeEvent(event);
+        if (event.type === "keydown" && event.key?.toLowerCase() === "m") {
+          ignoreWakeLockButtonReleaseRef.current = true;
+        }
+        wakeDisplay();
+        return;
+      }
+
+      if (Date.now() < wakeInputBlockUntilRef.current) {
+        stopWakeEvent(event);
+      }
+    };
+
+    const events = [
+      ["touchstart", document, { capture: true, passive: false }],
+      ["pointerdown", document, { capture: true }],
+      ["mousedown", document, { capture: true }],
+      ["click", document, { capture: true }],
+      ["wheel", document, { capture: true, passive: false }],
+      ["keydown", window, { capture: true }],
+      ["keyup", window, { capture: true }],
+    ];
+
+    events.forEach(([event, target, options]) => {
+      target.addEventListener(event, handleWakeInput, options);
+    });
+
+    return () => {
+      events.forEach(([event, target, options]) => {
+        target.removeEventListener(event, handleWakeInput, options);
+      });
+    };
+  }, [isMockingbirdEnabled, wakeDisplay]);
+
   useEffect(() => {
     if (showTutorial) return;
 
@@ -1043,10 +1283,10 @@ function AppContent() {
     viewingContent,
   ]);
 
-  const handleIdleLockFromNowPlaying = useCallback(() => {
-    if (activeSectionRef.current !== "nowPlaying") return;
+  const handleIdleLock = useCallback(() => {
+    if (activeSectionRef.current === "lock") return;
 
-    previousSectionRef.current = "nowPlaying";
+    previousSectionRef.current = activeSectionRef.current || "recents";
     idleLockActiveRef.current = true;
 
     activeSectionRef.current = "lock";
@@ -1055,11 +1295,24 @@ function AppContent() {
 
   const handleCloseLockView = useCallback(() => {
     idleLockActiveRef.current = false;
-    setActiveSection("recents");
+    const target = previousSectionRef.current || "recents";
+    activeSectionRef.current = target;
+    setActiveSection(target);
   }, []);
 
   useEffect(() => {
-    if (!currentPlayback?.is_playing || !idleLockActiveRef.current) return;
+    if (
+      playerEventSequence > 0 &&
+      (displaySleepingRef.current || displaySleepRequestedRef.current)
+    ) {
+      wakeDisplay();
+    }
+  }, [playerEventSequence, wakeDisplay]);
+
+  useEffect(() => {
+    if (!currentPlayback?.is_playing) return;
+
+    if (!idleLockActiveRef.current) return;
 
     const isLocked = activeSectionRef.current === "lock";
     const target = previousSectionRef.current ?? "nowPlaying";
@@ -1070,7 +1323,118 @@ function AppContent() {
     }
 
     idleLockActiveRef.current = false;
-  }, [currentPlayback?.is_playing]);
+  }, [currentPlayback]);
+
+  useEffect(() => {
+    if (!settings.idleLockEnabled || isMockingbirdEnabled || showTutorial) {
+      return;
+    }
+
+    let timeoutId = null;
+
+    const schedule = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (activeSectionRef.current === "lock") return;
+      timeoutId = setTimeout(() => {
+        timeoutId = null;
+        handleIdleLock();
+      }, IDLE_LOCK_MS);
+    };
+
+    const markActivity = () => {
+      if (activeSectionRef.current === "lock") return;
+      schedule();
+    };
+
+    const events = [
+      ["pointerdown", document, { capture: true, passive: true }],
+      ["touchstart", document, { capture: true, passive: true }],
+      ["click", document, { capture: true, passive: true }],
+      ["wheel", document, { capture: true, passive: true }],
+      ["keydown", window, { capture: true }],
+    ];
+
+    schedule();
+
+    events.forEach(([event, target, options]) => {
+      target.addEventListener(event, markActivity, options);
+    });
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach(([event, target, options]) => {
+        target.removeEventListener(event, markActivity, options);
+      });
+    };
+  }, [
+    settings.idleLockEnabled,
+    isMockingbirdEnabled,
+    showTutorial,
+    activeSection,
+    handleIdleLock,
+  ]);
+
+  useEffect(() => {
+    if (
+      !settings.idleDisplaySleepEnabled ||
+      isMockingbirdEnabled ||
+      showTutorial
+    ) {
+      if (!settings.idleDisplaySleepEnabled || isMockingbirdEnabled) {
+        wakeDisplay();
+      }
+      return;
+    }
+
+    let timeoutId = null;
+
+    const schedule = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (displaySleepingRef.current || displaySleepRequestedRef.current) {
+        return;
+      }
+      timeoutId = setTimeout(() => {
+        timeoutId = null;
+        sleepDisplay();
+      }, DISPLAY_IDLE_SLEEP_MS);
+    };
+
+    const markActivity = () => {
+      if (displaySleepingRef.current || displaySleepRequestedRef.current) {
+        return;
+      }
+      schedule();
+    };
+
+    const events = [
+      ["pointerdown", document, { capture: true, passive: true }],
+      ["touchstart", document, { capture: true, passive: true }],
+      ["click", document, { capture: true, passive: true }],
+      ["wheel", document, { capture: true, passive: true }],
+      ["keydown", window, { capture: true }],
+    ];
+
+    schedule();
+
+    events.forEach(([event, target, options]) => {
+      target.addEventListener(event, markActivity, options);
+    });
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach(([event, target, options]) => {
+        target.removeEventListener(event, markActivity, options);
+      });
+    };
+  }, [
+    settings.idleDisplaySleepEnabled,
+    isMockingbirdEnabled,
+    showTutorial,
+    activeSection,
+    displayWakeSequence,
+    sleepDisplay,
+    wakeDisplay,
+  ]);
 
   useEffect(() => {
     const holdTimerRef = { current: null };
@@ -1078,6 +1442,9 @@ function AppContent() {
 
     const handleKeyDown = (e) => {
       if (!e.key || e.key.toLowerCase() !== "m") return;
+
+      if (displaySleepingRef.current || displaySleepRequestedRef.current)
+        return;
 
       if (powerMenuVisibleRef.current) return;
 
@@ -1098,6 +1465,15 @@ function AppContent() {
 
     const handleKeyUp = (e) => {
       if (!e.key || e.key.toLowerCase() !== "m") return;
+
+      if (ignoreWakeLockButtonReleaseRef.current) {
+        ignoreWakeLockButtonReleaseRef.current = false;
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        e.stopPropagation();
+        return;
+      }
 
       if (holdTimerRef.current) {
         clearTimeout(holdTimerRef.current);
@@ -1338,7 +1714,6 @@ function AppContent() {
         onNavigateToAlbum={handleNavigateToAlbumFromNowPlaying}
         setIgnoreNextRelease={setIgnoreNextRelease}
         isReceivingNowPlayingUpdates={isReceivingNowPlayingUpdates}
-        onIdleLock={handleIdleLockFromNowPlaying}
       />
     );
   } else if (activeSection === "lock") {
@@ -1487,6 +1862,20 @@ function AppContent() {
               </main>
               <VoiceOverlay />
               <NotificationsContainer />
+              {displaySleepOverlayVisible && (
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    width: "100vw",
+                    height: "100vh",
+                    background: "#000",
+                    zIndex: 2147483647,
+                  }}
+                />
+              )}
             </Router>
           </DeviceSwitcherContext.Provider>
         </VoiceProvider>
