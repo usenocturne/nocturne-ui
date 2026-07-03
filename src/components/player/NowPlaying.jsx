@@ -1061,7 +1061,7 @@ function NowPlaying({
       ref={containerRef}
     >
       <div ref={contentContainerRef}>
-        <div className="md:w-1/3 flex flex-row items-center px-12 pt-10">
+        <div className="w-full flex flex-row items-center px-12 pt-10">
           <div
             className={`min-w-[280px] h-[280px] mr-8 ${albumId && !isLocalMedia && !isPhoneMedia ? "cursor-pointer" : ""}`}
             onClick={handleAlbumClick}
@@ -1100,10 +1100,13 @@ function NowPlaying({
                   maxWidth="400px"
                   pauseDuration={1000}
                   pixelsPerSecond={40}
+                  multilineWhenDisabled={true}
+                  multilineMaxHeight={200}
+                  multilineMinFontSize={24}
                 />
               </div>
               <h4
-                className={`text-[36px] font-[560] text-white/60 truncate tracking-tight max-w-[380px] ${firstArtistId && !isLocalMedia && !isPhoneMedia ? "cursor-pointer" : ""}`}
+                className={`text-[36px] font-[560] text-white/60 truncate tracking-tight max-w-[380px] ${settings.trackNameScrollingEnabled ? "" : "mt-2"} ${firstArtistId && !isLocalMedia && !isPhoneMedia ? "cursor-pointer" : ""}`}
                 onClick={handleArtistClick}
               >
                 {artistName}

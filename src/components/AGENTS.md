@@ -17,7 +17,7 @@ components/
 │   │   └── voice/        # Voice-assistant overlay: VoiceBorder, VoicePill, VoiceConfirmation, VolumeConfirmation, VoiceOverlay, constants.js
 │   ├── GradientBackground.jsx  # Animated album-art gradient (fed by useGradientState)
 │   ├── LockView.jsx            # Lock screen (right-most hardware button)
-│   ├── ScrollingText.jsx       # Marquee when text overflows (gated by trackNameScrollingEnabled)
+│   ├── ScrollingText.jsx       # Marquee when text overflows; can wrap selected text when trackNameScrollingEnabled is off
 │   ├── SpotifyImage.jsx        # Image via daemon proxy — ALWAYS use instead of <img>
 │   └── SubscriptionGate.jsx    # Renders children only if useSubscription().isSubscribed
 ├── content/ContentView.jsx     # 1237-line detail view for album/playlist/artist/show/mix/liked-songs
@@ -61,7 +61,7 @@ components/
 
 - **Icons via barrel:** `import { CheckIcon } from "../common/icons";` — never deep-import a single icon file.
 - **No `<img>`:** use `SpotifyImage` (daemon proxy) or `useImageLoader` (preload + color extract).
-- **Text overflow:** use `ScrollingText` — it respects the `trackNameScrollingEnabled` setting.
+- **Text overflow:** use `ScrollingText` — it respects the `trackNameScrollingEnabled` setting. For Now Playing titles, pass `multilineWhenDisabled` so disabling scrolling wraps the title across multiple lines instead of freezing a one-line marquee.
 - **`SubscriptionGate`** wraps premium-only UI; rely on it rather than inline `useSubscription()` checks so the fallback pattern stays consistent.
 - **Hardware-button long-press:** `useGlobalButtonMapping` in `App.jsx` owns preset mapping flow; don't duplicate in screens.
 

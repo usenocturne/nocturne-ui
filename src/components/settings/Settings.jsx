@@ -159,7 +159,7 @@ const settingsStructure = {
         title: "Track Name Scrolling",
         type: "toggle",
         description:
-          "Enable or disable the scrolling animation for the track name in the player.",
+          "Scroll long song titles in Now Playing. Turn off to wrap titles across multiple lines.",
         storageKey: "trackNameScrollingEnabled",
         defaultValue: true,
       },
