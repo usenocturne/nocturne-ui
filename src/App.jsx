@@ -818,6 +818,9 @@ function AppContent() {
     currentPlayback,
     refreshPlaybackState,
   );
+  const playerIsActive = currentPlayback?.is_playing === true;
+  const playerIsActiveRef = useRef(playerIsActive);
+  playerIsActiveRef.current = playerIsActive;
 
   const {
     showMappingOverlay: showGlobalMappingOverlay,
@@ -1310,6 +1313,14 @@ function AppContent() {
   }, [playerEventSequence, wakeDisplay]);
 
   useEffect(() => {
+    if (!playerIsActive) return;
+
+    if (displaySleepingRef.current || displaySleepRequestedRef.current) {
+      wakeDisplay();
+    }
+  }, [currentPlayback, playerIsActive, wakeDisplay]);
+
+  useEffect(() => {
     if (!currentPlayback?.is_playing) return;
 
     if (!idleLockActiveRef.current) return;
@@ -1386,6 +1397,11 @@ function AppContent() {
       return;
     }
 
+    if (playerIsActive) {
+      wakeDisplay();
+      return;
+    }
+
     let timeoutId = null;
 
     const schedule = () => {
@@ -1395,6 +1411,9 @@ function AppContent() {
       }
       timeoutId = setTimeout(() => {
         timeoutId = null;
+        if (playerIsActiveRef.current) {
+          return;
+        }
         sleepDisplay();
       }, DISPLAY_IDLE_SLEEP_MS);
     };
@@ -1432,6 +1451,7 @@ function AppContent() {
     showTutorial,
     activeSection,
     displayWakeSequence,
+    playerIsActive,
     sleepDisplay,
     wakeDisplay,
   ]);
