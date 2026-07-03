@@ -65,8 +65,6 @@ function NowPlaying({
   });
   const [suppressFillTransition, setSuppressFillTransition] = useState(false);
   const [phoneVolume, setPhoneVolume] = useState(null);
-  const [phoneMediaVolumeDirection, setPhoneMediaVolumeDirection] =
-    useState(null);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [repeatMode, setRepeatMode] = useState("off");
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -74,6 +72,7 @@ function NowPlaying({
   const [showDeviceSwitcher, setShowDeviceSwitcher] = useState(false);
 
   const volumeTimerRef = useRef(null);
+  const volumeHideTimerRef = useRef(null);
   const volumeLastAdjustedRef = useRef(0);
   const lastWheelEventRef = useRef(0);
   const wheelDeltaAccumulatorRef = useRef(0);
@@ -81,7 +80,9 @@ function NowPlaying({
   const currentTrackIdRef = useRef(null);
   const prevVolumeRef = useRef(null);
   const manualVolumeChangeRef = useRef(false);
-  const phoneVolumeTimeoutRef = useRef(null);
+  const latestPhoneVolumeRef = useRef(null);
+  const acceptedPhoneVolumeRef = useRef(null);
+  const phoneVolumeInteractionUntilRef = useRef(0);
 
   const isDJPlaylist =
     currentPlayback?.context?.uri === "spotify:playlist:37i9dQZF1EYkqdzj48dyYq";
@@ -188,6 +189,12 @@ function NowPlaying({
 
     if (volumeTimerRef.current) {
       clearTimeout(volumeTimerRef.current);
+      volumeTimerRef.current = null;
+    }
+
+    if (volumeHideTimerRef.current) {
+      clearTimeout(volumeHideTimerRef.current);
+      volumeHideTimerRef.current = null;
     }
 
     setVolumeOverlayState({
@@ -201,13 +208,19 @@ function NowPlaying({
         animation: "hiding",
       }));
 
-      setTimeout(() => {
+      volumeHideTimerRef.current = setTimeout(() => {
         setVolumeOverlayState({
           visible: false,
           animation: "hidden",
         });
 
         manualVolumeChangeRef.current = false;
+        phoneVolumeInteractionUntilRef.current = 0;
+        if (latestPhoneVolumeRef.current !== null) {
+          acceptedPhoneVolumeRef.current = latestPhoneVolumeRef.current;
+          setPhoneVolume(latestPhoneVolumeRef.current);
+        }
+        volumeHideTimerRef.current = null;
       }, 300);
     }, 1500);
   }, []);
@@ -226,15 +239,32 @@ function NowPlaying({
   useEffect(() => {
     const unsubscribe = subscribeToPhoneVolume((volumePercent) => {
       if (isPhoneMedia || isSmartphoneDevice) {
-        setPhoneVolume(volumePercent);
-        setPhoneMediaVolumeDirection(null);
-        manualVolumeChangeRef.current = true;
-        showVolumeOverlay();
+        const now = Date.now();
+        const isLocalPhoneVolumeInteraction =
+          now < phoneVolumeInteractionUntilRef.current;
+        const previousPhoneVolume = acceptedPhoneVolumeRef.current;
 
-        if (phoneVolumeTimeoutRef.current) {
-          clearTimeout(phoneVolumeTimeoutRef.current);
-          phoneVolumeTimeoutRef.current = null;
+        latestPhoneVolumeRef.current = volumePercent;
+        acceptedPhoneVolumeRef.current = volumePercent;
+
+        if (previousPhoneVolume === null) {
+          setPhoneVolume(volumePercent);
+          if (isLocalPhoneVolumeInteraction) {
+            showVolumeOverlay();
+          }
+          return;
         }
+
+        if (volumePercent === previousPhoneVolume) {
+          setPhoneVolume(volumePercent);
+          if (isLocalPhoneVolumeInteraction) {
+            showVolumeOverlay();
+          }
+          return;
+        }
+
+        setPhoneVolume(volumePercent);
+        showVolumeOverlay();
       }
     });
 
@@ -243,8 +273,8 @@ function NowPlaying({
       if (volumeTimerRef.current) {
         clearTimeout(volumeTimerRef.current);
       }
-      if (phoneVolumeTimeoutRef.current) {
-        clearTimeout(phoneVolumeTimeoutRef.current);
+      if (volumeHideTimerRef.current) {
+        clearTimeout(volumeHideTimerRef.current);
       }
     };
   }, [isPhoneMedia, isSmartphoneDevice, showVolumeOverlay]);
@@ -627,8 +657,7 @@ function NowPlaying({
 
         if (isPhoneMedia || isSmartphoneDevice) {
           manualVolumeChangeRef.current = true;
-          setPhoneMediaVolumeDirection(direction > 0 ? "up" : "down");
-          showVolumeOverlay();
+          phoneVolumeInteractionUntilRef.current = Date.now() + 2000;
 
           if (direction > 0) {
             phoneMediaVolumeUp();
@@ -803,7 +832,9 @@ function NowPlaying({
   useEffect(() => {
     if (!isPhoneMedia && !isSmartphoneDevice) {
       setPhoneVolume(null);
-      setPhoneMediaVolumeDirection(null);
+      latestPhoneVolumeRef.current = null;
+      acceptedPhoneVolumeRef.current = null;
+      phoneVolumeInteractionUntilRef.current = 0;
     }
   }, [isPhoneMedia, isSmartphoneDevice, trackId]);
 
@@ -956,40 +987,6 @@ function NowPlaying({
   }, [isPhoneMedia, isSmartphoneDevice, phoneVolume, volume]);
 
   const VolumeIcon = useMemo(() => {
-    if (
-      (isPhoneMedia || isSmartphoneDevice) &&
-      phoneVolume === null &&
-      phoneMediaVolumeDirection
-    ) {
-      if (phoneMediaVolumeDirection === "up") {
-        return (
-          <svg
-            className="w-12 h-12"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            style={{
-              animation: "bounce 0.6s ease-in-out infinite",
-            }}
-          >
-            <path d="M7 14l5-5 5 5z" />
-          </svg>
-        );
-      } else {
-        return (
-          <svg
-            className="w-12 h-12"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            style={{
-              animation: "bounce 0.6s ease-in-out infinite",
-            }}
-          >
-            <path d="M7 10l5 5 5-5z" />
-          </svg>
-        );
-      }
-    }
-
     const volumeToCheck =
       (isPhoneMedia || isSmartphoneDevice) && phoneVolume !== null
         ? phoneVolume
@@ -1002,13 +999,7 @@ function NowPlaying({
     } else {
       return <VolumeLoudIcon className="w-7 h-7" />;
     }
-  }, [
-    volume,
-    isPhoneMedia,
-    isSmartphoneDevice,
-    phoneVolume,
-    phoneMediaVolumeDirection,
-  ]);
+  }, [volume, isPhoneMedia, isSmartphoneDevice, phoneVolume]);
 
   const PlayPauseIcon = useMemo(() => {
     return currentPlayback?.is_playing ? (

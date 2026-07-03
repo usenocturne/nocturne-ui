@@ -105,6 +105,8 @@ export function useCarThingSpotifyIntegration(
   const currentImageUrlsRef = useRef([]);
   const volumeRef = useRef(50);
   const volumeDebounceRef = useRef(null);
+  const acceptedPhoneVolumeRef = useRef(null);
+  const phoneVolumeInteractionUntilRef = useRef(0);
 
   useEffect(() => {
     if (!carThingStores || !currentPlayback) return;
@@ -599,14 +601,12 @@ export function useCarThingSpotifyIntegration(
           carThingStores.playerStore.isOtherMediaPlaying ||
           activeDeviceType === "SMARTPHONE"
         ) {
+          phoneVolumeInteractionUntilRef.current = Date.now() + 2000;
           if (delta > 0) {
             phoneMediaVolumeUp?.();
           } else {
             phoneMediaVolumeDown?.();
           }
-          runInAction(() => {
-            npvStore.volumeUiState.resetShowVolumeTimer();
-          });
           return;
         }
 
@@ -726,6 +726,17 @@ export function useCarThingSpotifyIntegration(
   ]);
 
   useEffect(() => {
+    const isPhoneMedia = currentPlayback?.item?.is_phone_media === true;
+    const isSmartphoneDevice =
+      currentPlayback?.device?.type?.toUpperCase() === "SMARTPHONE";
+
+    if (!isPhoneMedia && !isSmartphoneDevice) {
+      acceptedPhoneVolumeRef.current = null;
+      phoneVolumeInteractionUntilRef.current = 0;
+    }
+  }, [currentPlayback?.device?.type, currentPlayback?.item?.is_phone_media]);
+
+  useEffect(() => {
     return () => {
       if (likeCheckTimeoutRef.current) {
         clearTimeout(likeCheckTimeoutRef.current);
@@ -763,16 +774,43 @@ export function useCarThingSpotifyIntegration(
     if (!carThingStores?.npvStore) return;
     const { npvStore } = carThingStores;
 
-    return subscribeToPhoneVolume((volumePercent) => {
+    const applyPhoneVolume = (volumePercent, shouldShow) => {
       const pct = volumePercent / 100;
       volumeRef.current = volumePercent;
       runInAction(() => {
         npvStore.volumeUiState.displayVolume = pct;
         npvStore.volumeUiState.volume = pct;
         npvStore.volumeUiState.isVolumeAbove0 = volumePercent > 0;
-        npvStore.volumeUiState.resetShowVolumeTimer();
+        if (shouldShow) {
+          npvStore.volumeUiState.resetShowVolumeTimer();
+        }
       });
+    };
+
+    const unsubscribe = subscribeToPhoneVolume((volumePercent) => {
+      const now = Date.now();
+      const previousPhoneVolume = acceptedPhoneVolumeRef.current;
+      const isLocalPhoneVolumeInteraction =
+        now < phoneVolumeInteractionUntilRef.current;
+
+      acceptedPhoneVolumeRef.current = volumePercent;
+
+      if (previousPhoneVolume === null) {
+        applyPhoneVolume(volumePercent, isLocalPhoneVolumeInteraction);
+        return;
+      }
+
+      if (volumePercent === previousPhoneVolume) {
+        applyPhoneVolume(volumePercent, isLocalPhoneVolumeInteraction);
+        return;
+      }
+
+      applyPhoneVolume(volumePercent, true);
     });
+
+    return () => {
+      unsubscribe();
+    };
   }, [carThingStores]);
 
   return {

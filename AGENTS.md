@@ -88,6 +88,10 @@ Both UI skins must send `audio.record.stop` and `voice.cancel` when dismissing a
 
 The rightmost top button opens the lock screen; it must not immediately turn off the backlight. The General setting `idleLockEnabled` auto-locks after 5 minutes of inactivity. The separate `idleDisplaySleepEnabled` setting turns the backlight off after 20 minutes of inactivity while playback is not actively playing by sending `device.display.sleep` on the existing `nocturned` WebSocket, and wakes with `device.display.wake` on the first wake input, player event, or processed `player.state` response with `is_playing: true`. The daemon owns transient backlight restore, including auto-brightness restart. Do not implement sleep by calling `device.brightness.set`; it persists manual brightness and can leave the device saved at the dimmest value.
 
+### Phone Volume Sync Contract
+
+The `phone.volume.update` event is phone system-volume sync from the phone app. It may arrive at startup, route changes, polling intervals, or from user volume-button holds that move quickly across the range. The main and Mockingbird volume overlays update immediately from phone volume messages after the hidden startup baseline, including large jumps. Car Thing knob volume for phone media must wait for the reported phone volume instead of showing directional placeholder arrows.
+
 ## CONVENTIONS
 
 - **No TypeScript.** Every file is `.js`/`.jsx`. ESLint rule: `no-unused-vars` allows `^[A-Z_]` (unused Icon imports tolerated).

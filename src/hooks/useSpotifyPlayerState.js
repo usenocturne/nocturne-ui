@@ -76,6 +76,13 @@ export const subscribeToPhoneVolume = (listener) => {
   };
 };
 
+const normalizePhoneVolumePercent = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const volume = Number(value);
+  if (!Number.isFinite(volume)) return null;
+  return Math.max(0, Math.min(100, Math.round(volume)));
+};
+
 const notifyPhoneVolumeListeners = (volumePercent) => {
   phoneVolumeListeners.forEach((listener) => {
     try {
@@ -1338,8 +1345,10 @@ export function useSpotifyPlayerState(immediateLoad = false) {
         data.type === "event" &&
         data.topic === "phone.volume.update"
       ) {
-        const volumePercent = data.data?.volumePercent;
-        if (volumePercent !== undefined) {
+        const volumePercent = normalizePhoneVolumePercent(
+          data.data?.volumePercent,
+        );
+        if (volumePercent !== null) {
           notifyPhoneVolumeListeners(volumePercent);
         }
       }

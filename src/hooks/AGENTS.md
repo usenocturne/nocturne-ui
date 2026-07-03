@@ -69,4 +69,5 @@ Hardware preset mappings are stored under `nocturne_presets:<bluetooth-address>`
 - **UUID-correlated requests**: All WebSocket requests use UUID message IDs with pending request maps for response matching
 - **Retry with backoff**: Data fetching uses `MAX_RETRIES` + `RETRY_DELAY` constants, WebSocket reconnects use exponential backoff capped at 30s
 - **Ref-heavy patterns**: Callbacks stored in refs to avoid stale closures in event listeners — standard pattern here, don't "simplify" to direct deps
+- **Phone volume updates**: `useSpotifyPlayerState.subscribeToPhoneVolume()` publishes normalized 0-100 values from `phone.volume.update`. Subscribers should baseline the first sync, immediately render later phone volume messages including large jumps from volume-button holds, and avoid knob-direction placeholders for phone-media volume.
 - **No TypeScript**: All hooks are `.js` (plain logic) except `useButtonMapping.jsx` (contains JSX)

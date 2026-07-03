@@ -65,6 +65,7 @@ components/
 - **`SubscriptionGate`** wraps premium-only UI; rely on it rather than inline `useSubscription()` checks so the fallback pattern stays consistent.
 - **Hardware-button long-press:** `useGlobalButtonMapping` in `App.jsx` owns preset mapping flow; don't duplicate in screens.
 - **Tutorial skip:** `Tutorial.jsx` owns the hidden Escape+4 hold shortcut. Keep it on the existing tutorial completion path so `hasSeenTutorial` and post-tutorial navigation stay in sync.
+- **Phone volume overlay:** `phone.volume.update` carries phone system volume and should update `VolumeOverlay` immediately after the hidden startup baseline, including large jumps from volume-button holds. Do not show directional placeholder arrows for phone-media knob volume; wait for the reported phone volume.
 
 ## ANTI-PATTERNS
 
