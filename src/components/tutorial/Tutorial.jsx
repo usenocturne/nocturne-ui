@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import TutorialFrame from "./TutorialFrame";
 import NocturneIcon from "../common/icons/NocturneIcon";
 import { useNavigation } from "../../hooks/useNavigation";
+
+const TUTORIAL_HOLD_MS = 800;
 
 const Tutorial = ({ onComplete, onStepChange }) => {
   const [currentScreen, setCurrentScreen] = useState(0);
@@ -10,9 +12,16 @@ const Tutorial = ({ onComplete, onStepChange }) => {
   const [isFrameVisible, setIsFrameVisible] = useState(false);
   const tutorialContainerRef = useRef(null);
   const holdTimerRef = useRef(null);
+  const skipComboTimerRef = useRef(null);
+  const skipComboKeysRef = useRef({ escape: false, four: false });
+  const onCompleteRef = useRef(onComplete);
   const isHoldingButton = useRef(false);
   const buttonLockRef = useRef(false);
   const lastPressedKey = useRef(null);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     if (currentScreen === 1) {
@@ -109,6 +118,13 @@ const Tutorial = ({ onComplete, onStepChange }) => {
     },
   ];
 
+  const completeTutorial = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hasSeenTutorial", "true");
+    }
+    onCompleteRef.current();
+  }, []);
+
   const handleScreenTransition = (nextScreen) => {
     const currentHeader = screens[currentScreen].header;
     const nextHeader = screens[nextScreen].header;
@@ -147,13 +163,76 @@ const Tutorial = ({ onComplete, onStepChange }) => {
 
   useEffect(() => {
     const validPresetButtons = ["1", "2", "3", "4"];
+    const isEscapeKey = (key) => key === "Escape" || key === "Esc";
+
+    const clearHoldTimer = () => {
+      if (holdTimerRef.current) {
+        clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = null;
+      }
+    };
+
+    const clearSkipComboTimer = () => {
+      if (skipComboTimerRef.current) {
+        clearTimeout(skipComboTimerRef.current);
+        skipComboTimerRef.current = null;
+      }
+    };
+
+    const cancelSkipCombo = () => {
+      clearSkipComboTimer();
+      skipComboKeysRef.current = { escape: false, four: false };
+    };
+
+    const suppressShortcutEvent = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+    };
+
+    const updateSkipCombo = (event, isPressed) => {
+      if (isEscapeKey(event.key)) {
+        skipComboKeysRef.current.escape = isPressed;
+      } else if (event.key === "4") {
+        skipComboKeysRef.current.four = isPressed;
+      } else {
+        return false;
+      }
+
+      const skipComboActive =
+        skipComboKeysRef.current.escape && skipComboKeysRef.current.four;
+
+      if (!skipComboActive) {
+        if (!isPressed) {
+          clearSkipComboTimer();
+        }
+        return false;
+      }
+
+      suppressShortcutEvent(event);
+      clearHoldTimer();
+      isHoldingButton.current = false;
+      lastPressedKey.current = null;
+
+      if (!skipComboTimerRef.current) {
+        skipComboTimerRef.current = setTimeout(() => {
+          skipComboTimerRef.current = null;
+          skipComboKeysRef.current = { escape: false, four: false };
+          completeTutorial();
+        }, TUTORIAL_HOLD_MS);
+      }
+
+      return true;
+    };
 
     const onKeyDown = (e) => {
+      if (updateSkipCombo(e, true)) return;
+
       if (buttonLockRef.current) return;
 
       if (
         screens[currentScreen].continueType === "backPress" &&
-        e.key === "Escape"
+        isEscapeKey(e.key)
       ) {
         e.preventDefault();
         e.stopPropagation();
@@ -195,7 +274,7 @@ const Tutorial = ({ onComplete, onStepChange }) => {
         holdTimerRef.current = setTimeout(() => {
           handleScreenTransition(currentScreen + 1);
           holdTimerRef.current = null;
-        }, 800);
+        }, TUTORIAL_HOLD_MS);
       }
 
       if (
@@ -214,12 +293,24 @@ const Tutorial = ({ onComplete, onStepChange }) => {
         holdTimerRef.current = setTimeout(() => {
           handleScreenTransition(currentScreen + 1);
           holdTimerRef.current = null;
-        }, 800);
+        }, TUTORIAL_HOLD_MS);
       }
     };
 
     const onKeyUp = (e) => {
       const validPresetButtons = ["1", "2", "3", "4"];
+      const skipComboWasActive =
+        skipComboTimerRef.current !== null ||
+        (skipComboKeysRef.current.escape && skipComboKeysRef.current.four);
+
+      if (isEscapeKey(e.key) || e.key === "4") {
+        updateSkipCombo(e, false);
+
+        if (skipComboWasActive) {
+          suppressShortcutEvent(e);
+          return;
+        }
+      }
 
       if (
         validPresetButtons.includes(e.key) &&
@@ -262,8 +353,9 @@ const Tutorial = ({ onComplete, onStepChange }) => {
         clearTimeout(holdTimerRef.current);
         holdTimerRef.current = null;
       }
+      cancelSkipCombo();
     };
-  }, [currentScreen]);
+  }, [completeTutorial, currentScreen]);
 
   useEffect(() => {
     const handleWheel = (event) => {
@@ -289,10 +381,7 @@ const Tutorial = ({ onComplete, onStepChange }) => {
 
   const handleContinue = () => {
     if (currentScreen === screens.length - 1) {
-      if (typeof window !== "undefined") {
-        localStorage.setItem("hasSeenTutorial", "true");
-      }
-      onComplete();
+      completeTutorial();
     } else {
       handleScreenTransition(currentScreen + 1);
     }

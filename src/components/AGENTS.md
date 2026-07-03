@@ -64,6 +64,7 @@ components/
 - **Text overflow:** use `ScrollingText` — it respects the `trackNameScrollingEnabled` setting. For Now Playing titles, pass `multilineWhenDisabled` so disabling scrolling wraps the title across multiple lines instead of freezing a one-line marquee.
 - **`SubscriptionGate`** wraps premium-only UI; rely on it rather than inline `useSubscription()` checks so the fallback pattern stays consistent.
 - **Hardware-button long-press:** `useGlobalButtonMapping` in `App.jsx` owns preset mapping flow; don't duplicate in screens.
+- **Tutorial skip:** `Tutorial.jsx` owns the hidden Escape+4 hold shortcut. Keep it on the existing tutorial completion path so `hasSeenTutorial` and post-tutorial navigation stay in sync.
 
 ## ANTI-PATTERNS
 
