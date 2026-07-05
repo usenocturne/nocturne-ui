@@ -89,6 +89,34 @@ const hasLiveBtSessionEvidence = (address) =>
 const getDevicesFromListResponse = (resp) =>
   (resp && resp.payload) || (resp && resp.result && resp.result.payload) || [];
 
+const findDeviceByAddress = (devices, address) =>
+  (Array.isArray(devices) ? devices : []).find(
+    (device) => device?.address === address,
+  ) || null;
+
+const getDeviceConnectOptions = (device) => {
+  if (!device) {
+    return {};
+  }
+
+  const options = {};
+  const channel = Number(device.channel);
+  if (Number.isInteger(channel) && channel > 0) {
+    options.channel = channel;
+  }
+
+  const deviceType = device.device_type || device.deviceType;
+  if (deviceType) {
+    options.device_type = deviceType;
+  }
+
+  if (device.connection_type) {
+    options.connection_type = device.connection_type;
+  }
+
+  return options;
+};
+
 const getReconnectableDeviceAddresses = (devices = []) => {
   const seen = new Set();
   const addresses = [];
@@ -398,9 +426,17 @@ let otaApplyTriggered = false;
 
 const queueConnectRequest = async (deviceAddress, options = {}) => {
   return new Promise((resolve, reject) => {
+    const cachedDevice = findDeviceByAddress(
+      getDevicesFromListResponse(lastDevicesListCache?.resp),
+      deviceAddress,
+    );
+    const inferredOptions = getDeviceConnectOptions(cachedDevice);
     const request = {
       deviceAddress,
-      options,
+      options: {
+        ...inferredOptions,
+        ...options,
+      },
       resolve,
       reject,
     };
@@ -421,10 +457,13 @@ const processConnectQueue = async () => {
   try {
     let result;
     try {
+      const options = request.options || {};
       result = await sendWsRequest("bluetooth.device.connect", {
         address: request.deviceAddress,
-        ...(request.options && request.options.channel
-          ? { channel: request.options.channel }
+        ...(options.channel ? { channel: options.channel } : {}),
+        ...(options.device_type ? { device_type: options.device_type } : {}),
+        ...(options.connection_type
+          ? { connection_type: options.connection_type }
           : {}),
       });
     } catch (err) {
@@ -473,6 +512,10 @@ const readConnectResponseJson = async (response) => {
 
 const isConnectResponseConnected = (data) =>
   data?.connected === true || data?.status === "connected";
+
+const isConnectResponsePending = (data) =>
+  data?.status === "waiting_for_macos_connector" ||
+  data?.status === "waiting_for_android";
 
 const attemptWsReconnection = () => {
   if (wsReconnectInProgress) {
@@ -1083,7 +1126,11 @@ export async function attemptBtReconnect() {
       window.dispatchEvent(new Event("networkScreenShow"));
     }
 
-    const response = await queueConnectRequest(deviceAddress);
+    const device = findDeviceByAddress(devices, deviceAddress);
+    const response = await queueConnectRequest(
+      deviceAddress,
+      getDeviceConnectOptions(device),
+    );
 
     if (btReconnectCancelled) {
       btReconnectInProgress = false;
@@ -1102,6 +1149,12 @@ export async function attemptBtReconnect() {
         } else {
           beginBtReconnectSettle(deviceAddress);
         }
+        return;
+      }
+
+      if (isConnectResponsePending(data)) {
+        localStorage.setItem("lastConnectedBluetoothDevice", deviceAddress);
+        beginBtReconnectSettle(deviceAddress);
         return;
       }
     }
