@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSpotifyWebSocket } from "./useSpotifyWebSocket";
-import { useNocturned, addGlobalWsListener } from "./useNocturned";
+import {
+  useNocturned,
+  addGlobalWsListener,
+  getSpotifySkippedState,
+} from "./useNocturned";
 
 let lastFetchTimestamp = 0;
 let pendingFetch = null;
@@ -801,7 +805,10 @@ export function useSpotifyPlayerState(immediateLoad = false) {
         beginNowPlayingUpdateWindow();
         isProcessingArtwork = false;
 
-        if (playback.PlaybackAppName === "Spotify") {
+        if (
+          playback.PlaybackAppName === "Spotify" &&
+          !getSpotifySkippedState()
+        ) {
           pendingSpotifyMediaUpdate = {
             media,
             playback,

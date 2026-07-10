@@ -92,6 +92,10 @@ The rightmost top button opens the lock screen; it must not immediately turn off
 
 The `phone.volume.update` event is phone system-volume sync from the phone app. It may arrive at startup, route changes, polling intervals, or from user volume-button holds that move quickly across the range. The main and Mockingbird volume overlays update immediately from phone volume messages after the hidden startup baseline, including large jumps. Car Thing knob volume for phone media must wait for the reported phone volume instead of showing directional placeholder arrows.
 
+### Spotify-Sourced Phone Media While Skipped
+
+`media.nowPlaying.update` events with `PlaybackAppName: "Spotify"` normally park on a pending placeholder (`useSpotifyPlayerState.js`) and wait for real Spotify Connect data. When Spotify auth is skipped (`getSpotifySkippedState()`), that data can never arrive, so the same events must fall through to the regular other-media path (`is_phone_media: true`, OtherMedia NPV) instead. Companions (phone apps and the macOS connector) keep sending `PlaybackAppName: "Spotify"` unchanged — the routing decision is the UI's, based on its own auth state.
+
 ## CONVENTIONS
 
 - **No TypeScript.** Every file is `.js`/`.jsx`. ESLint rule: `no-unused-vars` allows `^[A-Z_]` (unused Icon imports tolerated).
