@@ -96,6 +96,8 @@ The `phone.volume.update` event is phone system-volume sync from the phone app. 
 
 `media.nowPlaying.update` events with `PlaybackAppName: "Spotify"` normally park on a pending placeholder (`useSpotifyPlayerState.js`) and wait for real Spotify Connect data. When Spotify auth is skipped (`getSpotifySkippedState()`), that data can never arrive, so the same events must fall through to the regular other-media path (`is_phone_media: true`, OtherMedia NPV) instead. Companions (phone apps and the macOS connector) keep sending `PlaybackAppName: "Spotify"` unchanged — the routing decision is the UI's, based on its own auth state.
 
+While Spotify IS linked, Spotify data outranks Spotify-named media events: for the same track they may only fast-path `is_playing`/progress, never item metadata — `MediaItemArtist` is a first-artist-only string (from MediaRemote / phone media sessions) and writing it over a real item clobbers the full artist list until the next dealer event. Metadata from a media event is applied only as a transitional hint on an actual track change, and even then only when the dealer has been quiet for 8s (`DEALER_FRESH_THRESHOLD_MS`).
+
 ## CONVENTIONS
 
 - **No TypeScript.** Every file is `.js`/`.jsx`. ESLint rule: `no-unused-vars` allows `^[A-Z_]` (unused Icon imports tolerated).

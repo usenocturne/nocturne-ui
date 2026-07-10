@@ -963,19 +963,19 @@ export function useSpotifyPlayerState(immediateLoad = false) {
                 is_playing: isPlaying,
                 timestamp: Date.now(),
                 progress_ms: newProgressMs,
-                item: {
-                  ...prevPlayback.item,
-                  ...(isTitleChange
-                    ? { id: `spotify-transitional-${Date.now()}` }
-                    : {}),
-                  name: title,
-                  artists: artist
-                    ? [{ ...prevPlayback.item.artists?.[0], name: artist }]
-                    : prevPlayback.item.artists,
-                  ...(iap2Duration && iap2Duration > 0
-                    ? { duration_ms: iap2Duration }
-                    : {}),
-                },
+                item: isTitleChange
+                  ? {
+                      ...prevPlayback.item,
+                      id: `spotify-transitional-${Date.now()}`,
+                      name: title,
+                      artists: artist
+                        ? [{ ...prevPlayback.item.artists?.[0], name: artist }]
+                        : prevPlayback.item.artists,
+                      ...(iap2Duration && iap2Duration > 0
+                        ? { duration_ms: iap2Duration }
+                        : {}),
+                    }
+                  : prevPlayback.item,
               };
               currentPlaybackRef.current = updatedPlayback;
               return updatedPlayback;
