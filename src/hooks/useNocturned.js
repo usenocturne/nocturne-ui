@@ -1072,7 +1072,6 @@ export async function attemptBtReconnect() {
   try {
     btReconnectInProgress = true;
     emitBtReconnectState();
-    window.dispatchEvent(new Event("networkBannerShow"));
 
     let devices = [];
     let fetchedDevices = false;
@@ -1246,7 +1245,6 @@ const handleBluetoothSingletonMessage = (data) => {
     btReconnectCancelled = false;
     reconnectionExhausted = false;
     emitBtReconnectState();
-    window.dispatchEvent(new Event("networkBannerShow"));
     btReconnectTimer = setTimeout(() => {
       btReconnectTimer = null;
       attemptBtReconnect();
@@ -1274,9 +1272,6 @@ const handleBluetoothSingletonOpen = () => {
   }, BT_RECONNECT_INITIAL_DELAY);
 };
 
-// Install the singleton listener exactly once at module load. globalWsListeners
-// is a module-level array; pushing here happens once per module import. The
-// id is unique so addMessageListener/removeMessageListener never touch it.
 globalWsListeners.push({
   id: "bt-singleton-reconnect",
   onMessage: handleBluetoothSingletonMessage,
